@@ -11,6 +11,7 @@
 #include "../libraries/cxxopts/include/cxxopts.hpp"
 
 #include "logic.hh"
+#include "Dd.hh"
 
 /* uses ===================================================================== */
 
@@ -29,7 +30,8 @@ using cxxopts::value;
 
 /* consts =================================================================== */
 
-const Float MEGA = 1e6; // same as countAntom (1 MB = 1e6 B)
+//mega defined in Dd.hh which is included
+//const Float MEGA = 1e6; // same as countAntom (1 MB = 1e6 B)
 
 const string WEIGHTED_COUNTING_OPTION = "wc";
 const string PLANNER_WAIT_OPTION = "pw";
@@ -46,6 +48,10 @@ const string LOG_COUNTING_OPTION = "lc";
 const string JOIN_PRIORITY_OPTION = "jp";
 const string VERBOSE_JOIN_TREE_OPTION = "vj";
 const string VERBOSE_PROFILING_OPTION = "vp";
+const string COUNT_OR_SAMPLE_OPTION = "cs";
+const string NUM_SAMPLES_OPTION = "ns";
+const string SAMPLE_FILE_OPTION = "sf";
+const string SAMPLE_PREC_OPTION = "sp";
 
 const string FIRST_JOIN_TREE = "f";
 const string TIMED_JOIN_TREES = "t";
@@ -77,6 +83,10 @@ extern string joinPriority;
 extern Int verboseJoinTree; // 1: parsed join tree, 2: raw join tree too
 extern Int verboseProfiling; // 1: sorted stats for cnf vars, 2: unsorted stats for join nodes too
 
+extern char countOrSample;
+extern string sampleFile;
+extern Int numSamples;
+extern Int samplePrec;
 /* classes for processing join trees ======================================== */
 
 class JoinTree { // for JoinTreeProcessor
@@ -138,40 +148,6 @@ public:
 
 /* classes for decision diagrams ============================================ */
 
-class Dd { // wrapper for CUDD and Sylvan
-public:
-  ADD cuadd; // CUDD
-  Mtbdd mtbdd; // Sylvan
-
-  Dd(const ADD& cuadd); // CUDD
-  Dd(const Mtbdd& mtbdd); // SYLVAN
-  Dd(const Dd& dd);
-
-  static const Cudd* newMgr(Float mem, Int threadIndex); // CUDD
-  static Dd getConstDd(const Number& n, const Cudd* mgr);
-  static Dd getZeroDd(const Cudd* mgr);
-  static Dd getOneDd(const Cudd* mgr);
-  static Dd getVarDd(Int ddVar, bool val, const Cudd* mgr);
-  size_t countNodes() const;
-  bool operator<(const Dd& rightDd) const; // *this < rightDd (top of priotity queue is rightmost element)
-  Number extractConst() const;
-  Dd getComposition(Int ddVar, bool val, const Cudd* mgr) const; // restricts *this to ddVar=val
-  Dd getProduct(const Dd& dd) const;
-  Dd getSum(const Dd& dd) const;
-  Dd getMax(const Dd& dd) const; // real max (not 0-1 max)
-  Set<Int> getSupport() const;
-  Dd getAbstraction(
-    Int ddVar,
-    const vector<Int>& ddVarToCnfVarMap,
-    const Map<Int, Number>& literalWeights,
-    const Assignment& assignment,
-    bool additive, // ? getSum : getMax
-    const Cudd* mgr
-  ) const;
-  void writeDotFile(const Cudd* mgr, string dotFileDir = "./") const;
-  static void writeInfoFile(const Cudd* mgr, string filePath);
-};
-
 class Executor {
 public:
   static Map<Int, Float> varDurations; // cnfVar |-> total execution time in seconds
@@ -211,6 +187,13 @@ public:
     Int sliceVarOrderHeuristic
   );
   static Number solveCnf(
+    const JoinNonterminal* joinRoot,
+    const Map<Int, Int>& cnfVarToDdVarMap,
+    const vector<Int>& ddVarToCnfVarMap,
+    Int sliceVarOrderHeuristic
+  );
+
+  static Number sampleCnf(
     const JoinNonterminal* joinRoot,
     const Map<Int, Int>& cnfVarToDdVarMap,
     const vector<Int>& ddVarToCnfVarMap,

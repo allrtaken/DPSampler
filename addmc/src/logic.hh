@@ -147,6 +147,8 @@ namespace util {
   void printPreciseFloat(Float f);
   void printPreciseFloatRow(string key, Float f, size_t keyWidth);
 
+  void printComment(const string &message, Int preceedingNewLines = 0, Int followingNewLines = 1, bool commented = true);
+
   template<typename T> void printRow(string key, const T& val, size_t keyWidth = 30) {
     printRowKey(key, keyWidth);
     cout << val << "\n";
@@ -340,8 +342,12 @@ public:
   Set<Int> projectionVars; // empty for JoinTerminal
   Set<Int> preProjectionVars; // set by constructor
 
+  void* dd = 0; // for sampling. void* type so as to avoid circular dependency with class Dd definition in dmc.hh 
+
   static void resetStaticFields(); // backs up and clears static fields
   static void restoreStaticFields(); // from backup
+
+  void setDD(void*);
 
   virtual Int getWidth(const Assignment& assignment = Assignment()) const = 0; // of subtree
 

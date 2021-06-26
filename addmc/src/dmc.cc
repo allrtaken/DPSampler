@@ -1,5 +1,5 @@
 #include "dmc.hh"
-
+#include "sampler/ADDSampler.hpp"
 /* global vars ============================================================== */
 
 Int dotFileIndex = 1;
@@ -13,6 +13,11 @@ Float maxMem;
 string joinPriority;
 Int verboseJoinTree;
 Int verboseProfiling;
+
+char countOrSample = 'c';
+string sampleFile = "/dev/null";
+Int numSamples = 1000;
+Int samplePrec = 200;
 
 /* classes for processing join trees ======================================== */
 
@@ -721,6 +726,13 @@ Dd Executor::solveSubtree(const JoinNode* joinNode, const Map<Int, Int>& cnfVarT
     }
     dd = childDdQueue.top();
   }
+  if (countOrSample != 'c'){
+      if (joinNode->projectionVars.size()>0){
+        Dd* d = new Dd(dd); // to make sure it does not go out of scope since we are storing a pointer
+        ((JoinNode*) joinNode)->dd = (void*) d; //cast away const-ness of joinNode to modify dd. Should be fine since object itself is not const
+        //joinNode->dd = (void*)&dd;
+      }
+    }
 
   for (Int cnfVar : joinNode->projectionVars) {
     Int ddVar = cnfVarToDdVarMap.at(cnfVar);
@@ -861,6 +873,34 @@ Number Executor::solveCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>& 
   return totalSolution;
 }
 
+Number Executor::sampleCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>& cnfVarToDdVarMap, const vector<Int>& ddVarToCnfVarMap, Int sliceVarOrderHeuristic){
+  assert(ddPackage != SYLVAN); //not implemented yet
+  assert(JoinNode::cnf.declaredVarCount == JoinNode::cnf.additiveVars.size()); //exist-var processing not implemented yet
+  Float threadMem = maxMem;
+  const Cudd* mgr = Dd::newMgr(threadMem, 0); // thread index is 0 since only 1 thread
+  Number apparentSolution = solveSubtree(static_cast<const JoinNode*>(joinRoot), cnfVarToDdVarMap, ddVarToCnfVarMap, mgr).extractConst();
+  Float startTime = 0; //TODO: need to set properly
+  
+  /*set freevars*/
+  Set<Int> freeVars;
+  for (Int var = 1; var <= JoinNode::cnf.declaredVarCount; var++) { // processes hidden existential vars
+    if (!JoinNode::cnf.apparentVars.contains(var) ) {
+      freeVars.insert(var);
+    }
+  }
+  
+  Sampler::ADDSampler a(static_cast<const JoinNode*>(joinRoot), mgr, JoinNode::cnf.declaredVarCount, JoinNode::cnf.apparentVars.size(), cnfVarToDdVarMap, ddVarToCnfVarMap, 
+			JoinNode::cnf.literalWeights, freeVars, true, startTime);
+  a.buildDataStructures();
+  util::printComment("Starting Sampling to file "+sampleFile+" ..");
+  FILE* ofp = fopen(sampleFile.c_str(),"w");
+	fprintf(ofp,"%s %lld %lld\n",sampleFile.c_str(), JoinNode::cnf.declaredVarCount, numSamples);
+	a.sampleAndWriteToFile(ofp, numSamples, true);
+  fclose(ofp);
+  util::printComment("Done Sampling!");
+  return apparentSolution;
+}
+
 Number Executor::adjustSolution(const Number &apparentSolution) {
   Number n = apparentSolution;
 
@@ -982,8 +1022,13 @@ Executor::Executor(const JoinNonterminal* joinRoot, Int ddVarOrderHeuristic, Int
     Int cnfVar = ddVarToCnfVarMap.at(ddVar);
     cnfVarToDdVarMap[cnfVar] = ddVar;
   }
-
-  Number n = solveCnf(joinRoot, cnfVarToDdVarMap, ddVarToCnfVarMap, sliceVarOrderHeuristic);
+  Number n;
+  if (countOrSample == 'c'){
+    n = solveCnf(joinRoot, cnfVarToDdVarMap, ddVarToCnfVarMap, sliceVarOrderHeuristic);
+  } else {
+    n = sampleCnf(joinRoot, cnfVarToDdVarMap, ddVarToCnfVarMap, sliceVarOrderHeuristic);
+  }
+  
 
   printVarDurations();
   printVarDdSizes();
@@ -1123,6 +1168,10 @@ OptionDict::OptionDict(int argc, char** argv) {
     (VERBOSE_JOIN_TREE_OPTION, "verbose join tree: 0, " + INPUT_VERBOSITIES, value<Int>()->default_value("0"))
     (VERBOSE_PROFILING_OPTION, "verbose profiling: 0, 1, 2; int", value<Int>()->default_value("0"))
     (VERBOSE_SOLVING_OPTION, util::helpVerboseSolving(), value<Int>()->default_value("1"))
+    (COUNT_OR_SAMPLE_OPTION, "count:c sample:s; char", value<char>()->default_value("c"))
+    (SAMPLE_FILE_OPTION, "path to store samples; string", value<string>()->default_value("/dev/null"))
+    (NUM_SAMPLES_OPTION, "number of samples to generate; int", value<Int>()->default_value("1000"))
+    (SAMPLE_PREC_OPTION, "Number of Bits of Precision to use if Sample Prec Type is GMP (MPF); int", value<Int>()->default_value("200"))
   ;
   cxxopts::ParseResult result = options.parse(argc, argv);
   if (result.count(CNF_FILE_OPTION)) {
@@ -1136,6 +1185,22 @@ OptionDict::OptionDict(int argc, char** argv) {
 
     ddPackage = result[DD_PACKAGE_OPTION].as<string>(); // global var
     assert(DD_PACKAGES.contains(ddPackage));
+
+    countOrSample = result[COUNT_OR_SAMPLE_OPTION].as<char>(); //global var
+    if (countOrSample == 's'){
+      util::printComment("countOrSample set to sample. Setting ddPackage to CUDD (Sylvan sampling not supported yet)");
+      ddPackage = CUDD;
+    } else if(countOrSample == 'c'){
+      util::printComment("countOrSample set to count");
+    } else {
+      util::printComment("countOrSample not recognized. Defaulting to count ('c')..");
+    }
+
+    sampleFile = result[SAMPLE_FILE_OPTION].as<string>(); //global var
+
+    numSamples = result[NUM_SAMPLES_OPTION].as<Int>(); //global var
+
+    samplePrec = result[SAMPLE_PREC_OPTION].as<Int>(); //global var
 
     threadCount = result[THREAD_COUNT_OPTION].as<Int>(); // global var
     if (threadCount <= 0) {

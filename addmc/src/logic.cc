@@ -16,6 +16,12 @@ Int verboseSolving;
 
 /* namespace util =========================================================== */
 
+void util::printComment(const string &message, Int preceedingNewLines, Int followingNewLines, bool commented) {
+  for (Int i = 0; i < preceedingNewLines; i++) cout << "\n";
+  cout << (commented ? "c " : "") << message;
+  for (Int i = 0; i < followingNewLines; i++) cout << "\n";
+}
+
 string util::useDdPackage(string ddPackageArg) {
   assert(DD_PACKAGES.contains(ddPackageArg));
   return " [with " + DD_PACKAGE_OPTION + "_arg = " + ddPackageArg + "]";
@@ -845,6 +851,10 @@ void JoinNode::restoreStaticFields() {
   nodeCount = backupNodeCount;
   terminalCount = backupTerminalCount;
   nonterminalIndices = backupNonterminalIndices;
+}
+
+void JoinNode::setDD(void* dd_){
+  this->dd = dd_;
 }
 
 Set<Int> JoinNode::getPostProjectionVars() const {
