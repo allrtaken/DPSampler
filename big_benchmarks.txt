@@ -1,0 +1,20 @@
+ 2029  python runDMC.py ../experiments/benchmarks/raw/bayes/or-100-20-2.cnf c
+ 2030  python runDMC.py ../experiments/benchmarks/raw/bayes/50-10-1-q.cnf 
+ 2031  python runDMC.py ../experiments/benchmarks/raw/bayes/50-10-1-q.cnf c
+ 2032  python runDMC.py examples/50-10-1-q.cnf c 
+ 2033  DMC/dmc
+ 2034  python runDMC.py examples/50-10-1-q.cnf c 
+ 2035  python runDMC.py ../experiments/benchmarks/raw/bayes/50-10-1-q.cnf c
+ 2036  python runDMC.py ../experiments/benchmarks/raw/bayes/or-100-20-2.cnf c
+ 2037  python runDMC.py ../experiments/benchmarks/raw/bayes/or-100-20-10-UC-60.cnf c
+ 2038  python runDMC.py ../experiments/benchmarks/raw/bayes/50-10-1-q.cnf c
+ 2039  python runDMC.py ../experiments/benchmarks/raw/bayes/90-34-1-q.cnf c
+ 2040  python runDMC.py ../experiments/benchmarks/raw/bayes/90-34-1-q.cnf s
+ 2041  python runDMC.py ../experiments/benchmarks/raw/bayes/50-16-3-q.cnf c
+ 2042  python runDMC.py ../experiments/benchmarks/raw/bayes/50-18-3-q.cnf c
+ 2043  python runDMC.py ../experiments/benchmarks/raw/bayes/50-18-3-q.cnf s
+ 2044  python runDMC.py ../experiments/benchmarks/raw/bayes/75-22-9-q.cnf c
+ 2045  history | less
+ 2046  history | tail | less
+ 2047  history | tail -n 20 | less
+ 2048  history | tail -n 20 > ../big_benchmarks.txt

@@ -1,3 +1,8 @@
+experiments
+procount_experiments_data
+*.nnf
+*.eps
+
 mcc/bin/*.cnf
 mcc/bin/dmc
 mcc/bin/flow_cutter_pace17
