@@ -270,12 +270,12 @@ SamplerNode* ADDSampler::createSamplingDAG(DdNode* node, Dd* a, unordered_map<Dd
 	if (!Cudd_IsConstant(node)){
 		Int nodeInd = node->index;
 		if (a->compressedPerm.find(nodeInd)!=a->compressedPerm.end()){
-			cmprsdLvl = a->compressedPerm.at(node->index)<<1;
+			cmprsdLvl = a->compressedPerm.at(nodeInd)<<1;
 		} else{
 			//for non-projectable vars, store cnfvarindex directly as negative.
 			//cnfvarids are already 1-indexed so won't clash with 0 of cmprsdlvls
 			//see header file comments for how the variable cmprsdLvl is interpreted
-			cmprsdLvl = -((ddVarToCnfVarMap.at(node->index))<<1); 
+			cmprsdLvl = -((ddVarToCnfVarMap.at(nodeInd))<<1); 
 		}
 		sNode_t = createSamplingDAG(Cudd_T(node), a, nodeMap);
 		// Float factor_t = computeFactor(cmprsdLvl, sNode_t->cmprsdLvl, a);
