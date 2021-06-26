@@ -1,0 +1,1 @@
+CUDD submodule included with DPSampler requires aclocal version 1.16 or higher. This version is not available through apt command on ubuntu-16. However, aclocal 1.14 (which is available) is sufficient to make cudd. The files in this directory have the requirement changed from 1.16 to 1.14 and should be used to replace the corresponding files in the submodule as a workaround.
