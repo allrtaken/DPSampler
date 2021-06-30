@@ -53,8 +53,8 @@ Sampler::SamplerNode::SamplerNode(WtType wt_, SamplerNode* t_, SamplerNode* e_, 
 	cmprsdLvl(cmprsdLvl_), auxVar(1) {}
 
 ADDSampler::ADDSampler(const JoinNode *root_, const Cudd* mgr_ , Int nTotalVars_, Int nApparentVars_, unordered_map<Int,Int> c2DVarMap, vector<Int> d2CVarMap,
-	unordered_map<Int, Number> litWeights_, Set<Int> freeVars_,	bool checkAsmts_, Float startTime_): cnfVarToDdVarMap(c2DVarMap), ddVarToCnfVarMap(d2CVarMap), 
-	litWts(litWeights_.size()*3/2+3), freeVars(freeVars_), checkAsmts(checkAsmts_), startTime(startTime_), jtRoot(root_), mgr(*mgr_), nTotalVars(nTotalVars_),
+	unordered_map<Int, Number> litWeights_, Set<Int> freeVars_,	bool checkAsmts_): cnfVarToDdVarMap(c2DVarMap), ddVarToCnfVarMap(d2CVarMap), 
+	litWts(litWeights_.size()*3/2+3), freeVars(freeVars_), checkAsmts(checkAsmts_), jtRoot(root_), mgr(*mgr_), nTotalVars(nTotalVars_),
 	nApparentVars(nApparentVars_){
 	
 	rb.SeedEngine();
@@ -62,9 +62,10 @@ ADDSampler::ADDSampler(const JoinNode *root_, const Cudd* mgr_ , Int nTotalVars_
 	litWts.at(0) = -1;
 	litWts.at(1) = -1;
 	litWts.at(2) = -1;
+	
 	#ifndef SAMPLE_NUM_TYPE
-		#define SAMPLE_NUM_TYPE 0
-		util::printComment("Macro SAMPLE_NUM_TYPE not defined. Setting to default (0)..");
+		#define SAMPLE_NUM_TYPE 1
+		util::printComment("Macro SAMPLE_NUM_TYPE not defined. Setting to log-counting (1)..");
 	#endif 
 
 	#if SAMPLE_NUM_TYPE == 0
@@ -118,14 +119,11 @@ void ADDSampler::buildDataStructures(){
 	//printComment("#nodes in JoinTree:"+to_string(jtRoot->getNodeCount()));
 	util::printComment("Building aux structures..  ",0,0);
 	createAuxStructures(jtRoot);
+	// allAuxStructsTime = util::getTimePoint();
 	util::printComment("Built all aux structures!",0,1,false);
-	//allAuxStructsTime = cpuTimeTotal();
-	//SamplerUtils::printTimeTaken("Construct All Aux Structs",allAuxStructsTime - startTime,2);
 	util::printComment("Building sampling DAGs..  ",0,0);
 	createSamplingDAGs(jtRoot);
 	util::printComment("Built sampling DAGs!",0,1,false);
-	//allDAGsTime = cpuTimeTotal();
-	//SamplerUtils::printTimeTaken("Construct All Sampling DAGs",allDAGsTime - allAuxStructsTime,2);
 	util::printComment("Finished building all Datastructures!");
 }
 
@@ -153,9 +151,8 @@ void ADDSampler::createAuxStructure(const JoinNode* jNode){
 		a->precompileSampleDAG = true;  // no assignments at root so can precompile
 	} else{
 		a->precompileSampleDAG = true; //precompile all for new top-down sampling method
-		//cant precompile unless restrictions on variable ordering. Usually not efficient to
-		//have such restrictions that enable precompiling so setting to false. (restrictions would be having all samplevars
-		//grouped together)
+		// for older bottom up sampling cant precompile unless restrictions on variable ordering.
+		//so had set all non-root nodes to false. Now can precompile everything
 	}
 	vector<Indexer> ind_level_map;
 	//generate perm o(n)
@@ -216,18 +213,14 @@ WtType ADDSampler::computeFactor(Int startCmprsdLvl, Int endCmprsdLvl, bool tE, 
 	// outer *3 since litWts is a vector storing three weights per index (then and tot and else)
 	Int thenWtIndex = compressedInvPerm.at(2*startCmprsdLvl)*3; 
 	WtType factor = tE? litWts.at(thenWtIndex): litWts.at(thenWtIndex+2);//*2 done previously
-	// Float factor = tE? litWts[cnfVarIndex]: litWts[cnfVarIndex+1] - litWts[cnfVarIndex];//*2 done previously
 	// cout<<"cmprsdperm size:"<<a.compressedInvPerm.size()<<"\n";
 	for (Int i = startCmprsdLvl+1; i < endCmprsdLvl; i++){
 		Int totWtIndex = compressedInvPerm.at(2*i) * 3 + 1;
-		// cnfVarIndex = a.compressedInvPerm[2*i] * 2 + 1;
-		//Int ddVarIndex = a.compressedInvPerm[2*i+1];
 		#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2			
 			factor *= litWts.at(totWtIndex);
 		#else
 			factor += litWts.at(totWtIndex);
 		#endif
-		// factor *= litWts[cnfVarIndex+1];
 	}
 	#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
 		assert(factor!=0);
@@ -278,10 +271,7 @@ SamplerNode* ADDSampler::createSamplingDAG(DdNode* node, Dd* a, unordered_map<Dd
 			cmprsdLvl = -((ddVarToCnfVarMap.at(nodeInd))<<1); 
 		}
 		sNode_t = createSamplingDAG(Cudd_T(node), a, nodeMap);
-		// Float factor_t = computeFactor(cmprsdLvl, sNode_t->cmprsdLvl, a);
 		sNode_e = createSamplingDAG(Cudd_E(node), a, nodeMap);
-		// Float factor_e = computeFactor(cmprsdLvl, sNode_e->cmprsdLvl, a);
-		// wt = sNode_t->wt*factor_t + sNode_e->wt*factor_e;
 	} else{
 		if (logCounting){
 			#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
@@ -411,6 +401,7 @@ WtType ADDSampler::sampleFromADD(SamplerNode* sNode, vector<Int>& compressedInvP
 			bool bit = rb.generateWeightedRandomBit(sNode->auxVar, sNode->wt); // arguments are poswt and totWt
 		#else
 			bool bit = rb.generateWeightedRandomBit(exp10l(sNode->auxVar), exp10l(sNode->wt)); // arguments are poswt and totWt
+			//bool bit = rb.generateWeightedRandomBit(exp10l(sNode->auxVar-sNode->wt), 1);
 		#endif
 		t->set(bit,cnfVarIndex);
 		assert(notSampled.erase(cnfVarIndex));

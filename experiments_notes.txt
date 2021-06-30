@@ -1,0 +1,35 @@
+run comparedists on pseudoweighted benchmarks.. like blasted110
+	todo: do logsumexp for gencnfsols. create script for random weighting. test
+	use gumbel max trick while sampling? 
+		gumbel trick is for sampling from log probabilities directly and seems to be more expensive in general (see https://timvieira.github.io/blog/post/2014/07/31/gumbel-max-trick/)
+		it makes sense to use it when big array of log probabilties (probably a stream) and normalizing is expensive
+		in case of ADD sampling, it seems to be better to go the normal exponentiate and sample way
+		but sampling accuracy seems to be better when the weights are scaled properly. 
+			for instance, if totwt is too small then makes sense to make it 1, and scale thenwt accordingly
+			but doesnt make sense to bring down totwt to 1 when it is something like 10000 for ex
+			need to also figure out how to make this scaling efficient
+			will need to see when using cnfvarids instead of compressedvarids everywhere, because we might want to get rid of auxvar if possible to save memory. so scaling can allow to store only 1 var
+	on s27 benchmark, jensen shannon is quite high and increases with more samples. this was same in STS and it was because support of distribution is small. how to ensure it is okay?
+		try with pseudoweighted blasted110
+
+	there seemed to be a problem with dpsampler. the distribution on reweighted blasted110 did not match that of ideal sampler no matter what num type was used. it turned out to be a problem of /tmp running out of disk space which was not detected by comparedists or dmc etc. so I think the samples could not all be written. make sure there is enough disk space	
+	
+python3.7 or numpy has different rng than mt19937.. said to be better properties etc.. c++?
+	for now mt seems okay. it is apparently slower than some but has longest non-repeating sequence and good statistical properties
+
+print timing logs in sampler part. check what verbose prints in dmc part
+	change default flags to use verbose output for solve profile etc.. set default to samlple instead of count and logCounting true
+check whether any extra asserts or inefficiencies in code that can be easily removed
+	nothing except log part asserts for now
+	
+ask vu for mem requirements of dpmc.. jointree compilaion time?
+
+check whether static flag enables running on nots
+
+normalize all benchmarks to use mcc weight format.
+on nots set up benchmarks folder
+check all things that need to be logged (mem time etc)
+write scripts to run exps .. see maxmemusage flags in permanent exps
+make sure nnf files from waps are stored on scratch
+write samples to dev null? run small test exps where they are written to disk just to double check
+scripts for plotting graphs -- cactus, time vs num of samples, speedup for parallel

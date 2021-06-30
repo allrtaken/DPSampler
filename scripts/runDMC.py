@@ -17,6 +17,7 @@ sf = 'samples.txt'
 if len(sys.argv) > 5:
 	sf = sys.argv[5]
 
+'''
 cnf2 = '/tmp/wtd'+'_wt='+str(w)+'.cnf'
 f1 = open(cnf,'r')
 f2 = open(cnf2,'w')
@@ -36,10 +37,11 @@ if addWts:
 f1.close()
 f2.close()
 cnf = cnf2
+'''
 
 cmd1 = os.environ['DPSAMPLER']+'/lg/build/lg "lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < '+cnf+' > tree.tmp'
 cmd2 = os.environ['DPSAMPLER']+' DMC/dmc --cf='+cnf+' --cs='+cs+' --sf='+sf+'< tree.tmp'
-cmd3 = os.environ['DPSAMPLER']+'lg/build/lg "'+os.environ['DPSAMPLER']+'lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < '+cnf+' | '+os.environ['DPSAMPLER']+'dmc/dmc --pw=20 --cf='+cnf+' --lc=0 --cs='+cs+' --sf='+sf+' --ns='+str(ns)
+cmd3 = os.environ['DPSAMPLER']+'lg/build/lg "'+os.environ['DPSAMPLER']+'lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < '+cnf+' | '+os.environ['DPSAMPLER']+'dmc/dmc --pw=20 --cf='+cnf+' --lc=1 --wc=1 --cs='+cs+' --sf='+sf+' --ns='+str(ns)
 print cmd3
 os.system(cmd3)
 #print cmd2

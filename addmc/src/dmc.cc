@@ -878,9 +878,11 @@ Number Executor::sampleCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>&
   assert(JoinNode::cnf.declaredVarCount == JoinNode::cnf.additiveVars.size()); //exist-var processing not implemented yet
   Float threadMem = maxMem;
   const Cudd* mgr = Dd::newMgr(threadMem, 0); // thread index is 0 since only 1 thread
+  TimePoint preADDCompilationPoint = util::getTimePoint();
+  util::printRow("Total pre-(ADD-compilation) Time:",util::getDuration(toolStartPoint));
   Number apparentSolution = solveSubtree(static_cast<const JoinNode*>(joinRoot), cnfVarToDdVarMap, ddVarToCnfVarMap, mgr).extractConst();
-  Float startTime = 0; //TODO: need to set properly
-  
+  TimePoint postADDCompilationPoint = util::getTimePoint();
+  util::printRow("ADD-Compilation Time:",util::getDuration(preADDCompilationPoint));  
   /*set freevars*/
   Set<Int> freeVars;
   for (Int var = 1; var <= JoinNode::cnf.declaredVarCount; var++) { // processes hidden existential vars
@@ -890,14 +892,19 @@ Number Executor::sampleCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>&
   }
   
   Sampler::ADDSampler a(static_cast<const JoinNode*>(joinRoot), mgr, JoinNode::cnf.declaredVarCount, JoinNode::cnf.apparentVars.size(), cnfVarToDdVarMap, ddVarToCnfVarMap, 
-			JoinNode::cnf.literalWeights, freeVars, true, startTime);
+			JoinNode::cnf.literalWeights, freeVars, true);
   a.buildDataStructures();
+  TimePoint postSamplerCompilationPoint = util::getTimePoint();
+	util::printRow("Sampler Compilation Time:",util::getDuration(postADDCompilationPoint));
   util::printComment("Starting Sampling to file "+sampleFile+" ..");
   FILE* ofp = fopen(sampleFile.c_str(),"w");
 	fprintf(ofp,"%s %lld %lld\n",sampleFile.c_str(), JoinNode::cnf.declaredVarCount, numSamples);
-	a.sampleAndWriteToFile(ofp, numSamples, true);
+  a.sampleAndWriteToFile(ofp, numSamples, true);
   fclose(ofp);
   util::printComment("Done Sampling!");
+  Float totalSampleGenTime = util::getDuration(postSamplerCompilationPoint);
+  util::printRow("Sample Generation Time:", totalSampleGenTime);
+  util::printRow("Time per sample:",totalSampleGenTime/numSamples);
   return apparentSolution;
 }
 

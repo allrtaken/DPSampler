@@ -61,7 +61,7 @@ class SamplerNode{
 class ADDSampler{
 	public:
 		ADDSampler(const JoinNode* root_, const Cudd* mgr_, Int nTotalVars_, Int nApparentVars, unordered_map<Int,Int> c2DVarMap, vector<Int> d2CVarMap, 
-			unordered_map<Int, Number> litWeights_, Set<Int> freeVars, bool checkAsmts_, Float startTime);
+			unordered_map<Int, Number> litWeights_, Set<Int> freeVars, bool checkAsmts_);
 		
 		void buildDataStructures();
 		Asmt& drawSample();
@@ -102,7 +102,7 @@ class ADDSampler{
 		Set<Int> freeVars;
 		//Float testNum, testDen;
 
-		Float startTime, allAuxStructsTime, allDAGsTime;
+		//TimePoint startTime, allAuxStructsTime, allDAGsTime, allSampleGenTime;
 };
 }//end namespace
 #endif

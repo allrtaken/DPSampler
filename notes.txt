@@ -37,6 +37,9 @@ TODO / To think (immediate to long term)
 ====================================================================================================
 
 	nodes can be shared across ADDs. So in createSampleDAG you can keep a global hashtable to not have to process nodes already processed in previous add
+		will need to store cnfvarids (or ddvarids) in samplernodes because nodes will be shared across adds, and different adds will have different cmprsdlvls for same nodes
+		then question is how to efficiently get intermediate skipped sample vars for computing factor. is auxvar needed or can do without?
+	free cudd adds after visiting?
 	
 	make log counting default in both count and sample
 	valgrind dpmc on some moderate benchmark .. see how much time the weighted abstract takes. See if you can get time tkaen for a particualr line in code
