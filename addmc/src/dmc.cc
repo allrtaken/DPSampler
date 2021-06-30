@@ -1155,7 +1155,7 @@ OptionDict::OptionDict(int argc, char** argv) {
   options.set_width(105);
   options.add_options()
     (CNF_FILE_OPTION, "cnf file path; string (REQUIRED)", value<string>())
-    (WEIGHTED_COUNTING_OPTION, "weighted counting: 0, 1; int", value<Int>()->default_value("0"))
+    (WEIGHTED_COUNTING_OPTION, "weighted counting: 0, 1; int", value<Int>()->default_value("1"))
     (PROJECTED_COUNTING_OPTION, "projected counting: 0, 1; int", value<Int>()->default_value("0"))
     (PLANNER_WAIT_OPTION, "planner wait duration (in seconds), or 0 for first join tree only; float", value<Float>()->default_value("0"))
     (DD_PACKAGE_OPTION, helpDdPackage(), value<string>()->default_value(CUDD))
@@ -1169,15 +1169,15 @@ OptionDict::OptionDict(int argc, char** argv) {
     (TABLE_RATIO_OPTION, "table ratio" + util::useDdPackage(SYLVAN) + ": log2(unique_size/cache_size); int", value<Int>()->default_value("1"))
     (INIT_RATIO_OPTION, "init ratio for tables" + util::useDdPackage(SYLVAN) + ": log2(max_size/init_size); int", value<Int>()->default_value("10"))
     (MULTIPLE_PRECISION_OPTION, "multiple precision" + util::useDdPackage(SYLVAN) + ": 0, 1; int", value<Int>()->default_value("0"))
-    (LOG_COUNTING_OPTION, "log counting" + util::useDdPackage(CUDD) + ": 0, 1; int", value<Int>()->default_value("0"))
+    (LOG_COUNTING_OPTION, "log counting" + util::useDdPackage(CUDD) + ": 0, 1; int", value<Int>()->default_value("1"))
     (JOIN_PRIORITY_OPTION, helpJoinPriority(), value<string>()->default_value(SMALLEST_PAIR))
     (VERBOSE_CNF_OPTION, "verbose cnf: 0, " + INPUT_VERBOSITIES, value<Int>()->default_value("0"))
     (VERBOSE_JOIN_TREE_OPTION, "verbose join tree: 0, " + INPUT_VERBOSITIES, value<Int>()->default_value("0"))
     (VERBOSE_PROFILING_OPTION, "verbose profiling: 0, 1, 2; int", value<Int>()->default_value("0"))
     (VERBOSE_SOLVING_OPTION, util::helpVerboseSolving(), value<Int>()->default_value("1"))
-    (COUNT_OR_SAMPLE_OPTION, "count:c sample:s; char", value<char>()->default_value("c"))
+    (COUNT_OR_SAMPLE_OPTION, "count:c sample:s; char", value<char>()->default_value("s"))
     (SAMPLE_FILE_OPTION, "path to store samples; string", value<string>()->default_value("/dev/null"))
-    (NUM_SAMPLES_OPTION, "number of samples to generate; int", value<Int>()->default_value("1000"))
+    (NUM_SAMPLES_OPTION, "number of samples to generate; int", value<Int>()->default_value("5000"))
     (SAMPLE_PREC_OPTION, "Number of Bits of Precision to use if Sample Prec Type is GMP (MPF); int", value<Int>()->default_value("200"))
   ;
   cxxopts::ParseResult result = options.parse(argc, argv);
@@ -1200,7 +1200,8 @@ OptionDict::OptionDict(int argc, char** argv) {
     } else if(countOrSample == 'c'){
       util::printComment("countOrSample set to count");
     } else {
-      util::printComment("countOrSample not recognized. Defaulting to count ('c')..");
+      util::printComment("countOrSample not recognized. Defaulting to sample ('s')..");
+      countOrSample = 's';
     }
 
     sampleFile = result[SAMPLE_FILE_OPTION].as<string>(); //global var

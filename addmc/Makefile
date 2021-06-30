@@ -5,7 +5,7 @@
 
 opt=-Ofast #copied from makefile in dmc folder
 
-ASSEMBLY_OPTIONS = -std=c++2a -Wno-register $(opt)
+ASSEMBLY_OPTIONS = -std=c++2a -Wno-register -static $(opt)
 
 # link = -static # beware of segfault with std::thread
 LINK_OPTIONS = -lgmpxx -lgmp $(link) # order matters
@@ -21,8 +21,8 @@ else ifeq ($(SAMPLE_NUM_TYPE),GMP)
 $(info "Using GMP for sampling..")
 SAMPLER_OPTIONS := $(SAMPLER_OPTIONS) -DSAMPLE_NUM_TYPE=2
 else
-$(info "SAMPLE_NUM_TYPE not specified. Using Floats (default) for sampling..")
-SAMPLER_OPTIONS := $(SAMPLER_OPTIONS) -DSAMPLE_NUM_TYPE=0
+$(info "SAMPLE_NUM_TYPE not specified or not recognized. Using logCounting (default) for sampling..")
+SAMPLER_OPTIONS := $(SAMPLER_OPTIONS) -DSAMPLE_NUM_TYPE=1
 endif
 
 ################################################################################
@@ -48,7 +48,7 @@ SAMPLER_OBJECTS = RandomBits.o ADDSampler.o
 .ONESHELL: # applies to all targets
 
 dmc: $(SAMPLER_OBJECTS) $(DMC_OBJECTS)
-	g++ -o dmc $(DMC_OBJECTS) $(SAMPLER_OBJECTS) $(SAMPLER_OPTIONS) $(CUDD_LINKS) $(SYLVAN_LINKS) $(LINK_OPTIONS)
+	g++ -o dmc $(DMC_OBJECTS) $(SAMPLER_OBJECTS) $(SAMPLER_OPTIONS) $(ASSEMBLY_OPTIONS) $(CUDD_LINKS) $(SYLVAN_LINKS) $(LINK_OPTIONS)
 
 htb: $(HTB_OBJECTS)
 	g++ -o htb $(HTB_OBJECTS) $(LINK_OPTIONS)
