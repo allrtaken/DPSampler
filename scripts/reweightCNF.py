@@ -10,12 +10,12 @@ outF = sys.argv[3]
 probLow = 0.3
 probHi = 0.7
 
-clauses,weighted,projected, litWts, projVars, nVars, nCls = parseCNF(inCNF)
+nVars, nCls, clauses, weighted, wEncountered, wType, litWts, projected, vpEncountered, projVars = parseCNF(inCNF)
 
-if weighted == True:
+if wEncountered == True:
 	print("WARNING: Input formula is already weighted. Ignoring those weights\n")
 
-if projected:
+if vpEncountered:
 	pVars = sorted(projVars)
 else:
 	pVars = range(1,nVars+1)

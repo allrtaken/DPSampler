@@ -24,16 +24,16 @@ def logsumexp(x):
 
 
 
-clauses,weighted,projected, litWts, projVars, nVars, nCls = parseCNF(inCNF)
+nVars, nCls, clauses, weighted, wEncountered, wType, litWts, projected, vpEncountered, projVars = parseCNF(inCNF)
 formula = CNF()
 formula.extend(clauses)
 
-if projected:
+if vpEncountered:
 	pVars = sorted(projVars)
 else:
 	pVars = range(1,formula.nv+1)
 
-if not weighted:
+if not wEncountered:
 	lWts = lambda x: 1
 else:
 	lWts = lambda x: litWts[x] if x in litWts else 1-litWts[-x] if -x in litWts else 1

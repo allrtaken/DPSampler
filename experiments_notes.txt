@@ -1,3 +1,57 @@
+results for waps
+	673 bayes have "samples saved to"
+	556 pseudoweighted have "samples saved to"
+		tot 1229
+	ddnnf construction attempted (file created) for 1941 out of 1976 benchmarks
+	ddnnf construction completed (file size > 0b) for 1572 bencmarks
+	665 files total with 'slurmstep' or 'cancelled' in them
+	1287 "slurm job finished at"
+	31 formulas unsat reported by d4 i.e. "s 0" line for count
+	43 reported UNSAT!!! by WAPS (of course overlapping with previous but files like bayes/waps_array_699.out had a proper model count through d4 but UNSAT!!! by wAPS
+	
+	24 formulas have blank output files (have asked helpdesk).
+		./bayes/waps_array_169.out
+		./bayes/waps_array_709.out
+		./bayes/waps_array_707.out
+		./bayes/waps_array_12.out
+		./bayes/waps_array_42.out
+		./bayes/waps_array_855.out
+		./pseudoweighted/waps_array_726.out
+		./pseudoweighted/waps_array_732.out
+		./pseudoweighted/waps_array_380.out
+		./pseudoweighted/waps_array_436.out
+		./pseudoweighted/waps_array_201.out
+		./pseudoweighted/waps_array_198.out
+		./pseudoweighted/waps_array_610.out
+		./pseudoweighted/waps_array_723.out
+		./pseudoweighted/waps_array_500.out
+		./pseudoweighted/waps_array_220.out
+		./pseudoweighted/waps_array_281.out
+		./pseudoweighted/waps_array_401.out
+		./pseudoweighted/waps_array_891.out
+		./pseudoweighted/waps_array_394.out
+		./pseudoweighted/waps_array_408.out
+		./pseudoweighted/waps_array_842.out
+		./pseudoweighted/waps_array_831.out
+		./pseudoweighted/waps_array_193.out
+
+	
+	run again with timelimit command
+	check with helpdesk about blank files, --profile=task output, and finding job informatioon such as from sj after job is done
+
+	sacct -j 3363363 --format=jobid,start,end,MaxRss,MaxVMSize,state,exitcode,derivedexitcode,comment| sort -n -k 4 | less
+
+change timeout signal to kill
+
+write checks to make sure sample writes are happening!!
+	can do that later.. just start some exps if possible
+
+waps ps and waps bayes scripts
+test folder with ps bayes subfolders
+ddnnf folder
+output and samples folder
+make sure python $WAPS/.. is working
+
 run comparedists on pseudoweighted benchmarks.. like blasted110
 	todo: do logsumexp for gencnfsols. create script for random weighting. test
 	use gumbel max trick while sampling? 
@@ -25,11 +79,33 @@ check whether any extra asserts or inefficiencies in code that can be easily rem
 ask vu for mem requirements of dpmc.. jointree compilaion time?
 
 check whether static flag enables running on nots
+	it does!
+	
+have set up latest waps!	
 
+bn2cnf translator from cril for translating bayesian networks into cnf
+
+set up and test slurmqueen
+	problem with ssh private key -it requires passphrase and no way to enter it directly if slurmqueen installed through pip. can do by changing code by installing through setup file, but either i will have to have the passphrase in text in the code or make a passphrase less key which i dont want to do.. i can prompt user for it but leaving for now because any way slurmqueen does not seem to be offering much advantage as given next
+	i thought sq would do round robin scheduling of jobs to slurmworkers but it does not do that.. you are supposed to assign jobs to workers yourself. then might as well use slurm job array like before.
+		
 normalize all benchmarks to use mcc weight format.
 on nots set up benchmarks folder
-check all things that need to be logged (mem time etc)
-write scripts to run exps .. see maxmemusage flags in permanent exps
+
+to ask jeff / vu
+	for best jt should i just use the max no. jt from /project/vardi/DPMC/store/2/flow/raw/... ? I see there is now a ../store/3/flow.. directory as well -- should i use that instead of store/2?
+	time taken for constructing jts (so that i can add it to the execution time)? experiments.zip contains directory data/planning/ which contains many subdirectories. Which one to use for store/2 (or store/3 depending on previous answer)? There is also planning_minfill -- do I need to use that?
+
+
+Kuldeeps big benchmarks?? Why not used in dpmc? Use in dpsampler?
+
+
+slurm logging -- example max mem used
+
 make sure nnf files from waps are stored on scratch
+
 write samples to dev null? run small test exps where they are written to disk just to double check
+
+use ULIMIT !! see sts and permanent slurm scripts
+
 scripts for plotting graphs -- cactus, time vs num of samples, speedup for parallel

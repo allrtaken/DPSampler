@@ -37,10 +37,18 @@ TODO / To think (immediate to long term)
 ====================================================================================================
 
 	nodes can be shared across ADDs. So in createSampleDAG you can keep a global hashtable to not have to process nodes already processed in previous add
-		will need to store cnfvarids (or ddvarids) in samplernodes because nodes will be shared across adds, and different adds will have different cmprsdlvls for same nodes
-		then question is how to efficiently get intermediate skipped sample vars for computing factor. is auxvar needed or can do without?
+	will need to store cnfvarids (or ddvarids) in samplernodes because nodes will be shared across adds, and different adds will have different cmprsdlvls for same nodes
+	then question is how to efficiently get intermediate skipped sample vars for computing factor. is auxvar needed or can do without?
 	free cudd adds after visiting?
-	
+		store only cnfvarids in all samplenodes -- no need for ddvarids at all. to do away with compsdlvl efficiently, store sorted sample cnfvarids for each add. when traversing add need to know 		whether current node is samplevar or not for that add and that node maybe shared with other adds. so the info of whether a node (with its cnfvarid) is samplevar or not will have to be stored 			externally. so in createsampledag only store cnfvarids. 
+		
+		in inplacecofactor, 
+			traversing top down, see if cnfvarid has asignmnt -- if yes it is not samplevar otherwise it is.  
+			need to check if node has been visited previously -- can use sign bit of cnfvarid
+			need to computeFactor with intermediate skipped sample levels --?
+				keep sorted list of cnfvarids per add and maintainpointer to current lvl in that list and update pointer when current node is not a samplevar
+			
+			
 	make log counting default in both count and sample
 	valgrind dpmc on some moderate benchmark .. see how much time the weighted abstract takes. See if you can get time tkaen for a particualr line in code
 	logcounting switch in sampling part, additive/exist vars, replace dgmp with command option, copy of else-weights instead of subtracting everytime, writemultipleasnmts, writeasnmnts in var format to support partial asnmts,
