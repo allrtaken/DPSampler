@@ -34,6 +34,7 @@ class Asmt{
 		bool get(Int i);
 		void clear();
 		void printAsmt();
+		bool isSet(Int i);
 	private:
 		vector<int8_t> bits; //not bool becz need to have 3rd 'unset' value (defined to be -1)
 };
@@ -51,7 +52,7 @@ class SamplerNode{
 	WtType wt;
 	SamplerNode* t;
 	SamplerNode* e;
-	Int cmprsdLvl;
+	Int cnfVarID;
 	//if node var is part of sampleset, auxvar stores wt*factor of 'then' branch, 
 	//if node var is previously assigned, auxvar stores inherited cmprsdLvl from appropriate child node
 	WtType auxVar; 
@@ -77,11 +78,14 @@ class ADDSampler{
 		WtType sampleFromADD(SamplerNode*, vector<Int>&, Set<Int>&);
 		void drawSample_rec(const JoinNode*);		
 		double getAsmtVal(Dd*);
-		Int inplaceCofactor(SamplerNode*, vector<Int>&);
+		//WtType inplaceCofactor(SamplerNode*, vector<Int>&);
+		Int inplaceCofactor(SamplerNode* sNode, Int* sampleCNFVarIDs, Int** currVarPtr);
 		void inplaceUnCofactor(SamplerNode*);
-		WtType computeFactor(Int startCmprsdLvl, Int endCmprsdLvl, bool tE, vector<Int>&);
+		//WtType computeFactor(Int startCmprsdLvl, Int endCmprsdLvl, bool tE, vector<Int>&);
+		WtType computeFactor(Int* sampleVarCNFIDs, Int currCNFVarID, Int** currVarPtr, bool tE);
 		void sampleMissing(Set<Int>& notSampled);
-		
+		void seekForward(Int* sampleVarCNFIDs, Int currCNFVarID, Int** currVarPtr);
+
 		bool checkAsmts;
 
 		Int nTotalVars, nApparentVars;
@@ -99,6 +103,7 @@ class ADDSampler{
 		//unordered_map<Int, Float> litWeights;
 		vector<WtType> litWts;
 		unordered_map<const JoinNode*, SamplerNode*> rootSNMap;
+		unordered_map<DdNode*, SamplerNode*> nodeMap;
 		Set<Int> freeVars;
 		//Float testNum, testDen;
 

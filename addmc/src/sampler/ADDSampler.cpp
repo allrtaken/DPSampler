@@ -26,6 +26,9 @@ void Asmt::set(bool bit, Int i){
 	assert(bits.at(i)==-1); //sampling is generally not the bottleneck so leaving asserts in place
 	bits[i] = bit;
 }
+bool Asmt::isSet(Int i){
+	return (bits.at(i)!=-1);
+}
 void Asmt::setNoCheck(bool bit, Int i){
 	printf("\nSet called on state %p at pos %lld!\n",this,i);
 	bits[i] = bit;
@@ -49,8 +52,8 @@ void Asmt::clear(){
 	}
 }
 
-Sampler::SamplerNode::SamplerNode(WtType wt_, SamplerNode* t_, SamplerNode* e_, Int cmprsdLvl_): wt(wt_), t(t_), e(e_), 
-	cmprsdLvl(cmprsdLvl_), auxVar(1) {}
+Sampler::SamplerNode::SamplerNode(WtType wt_, SamplerNode* t_, SamplerNode* e_, Int cnfVarID_): wt(wt_), t(t_), e(e_), 
+	cnfVarID(cnfVarID_), auxVar(1) {}
 
 ADDSampler::ADDSampler(const JoinNode *root_, const Cudd* mgr_ , Int nTotalVars_, Int nApparentVars_, unordered_map<Int,Int> c2DVarMap, vector<Int> d2CVarMap,
 	unordered_map<Int, Number> litWeights_, Set<Int> freeVars_,	bool checkAsmts_): cnfVarToDdVarMap(c2DVarMap), ddVarToCnfVarMap(d2CVarMap), 
@@ -167,11 +170,16 @@ void ADDSampler::createAuxStructure(const JoinNode* jNode){
 	//compress and insert o(n) 
 	
 	a->compressedInvPerm.resize(numPVars*2);
+	a->sampleVarCNFIDs = new Int[numPVars+2]; //+2 sentinels
+	a->sampleVarCNFIDs[0] = MIN_INT;
 	for(int i = 0; i< numPVars; i++){
+		a->sampleVarCNFIDs[i+1] = ind_level_map.at(i).index;
 		a->compressedPerm[ind_level_map.at(i).level] = i; //cmprsdperm stores mapping from ddvarid to cmprsdlevl
 		a->compressedInvPerm.at(2*i) = ind_level_map.at(i).index;
 		a->compressedInvPerm.at(2*i+1) = ind_level_map.at(i).level;
 	}
+	a->sampleVarCNFIDs[numPVars+1] = MAX_INT;
+	a->curVarPtr = a->sampleVarCNFIDs+1;
 	//cmprsdperm from ddvarindex to cmprsdlvl
 	//cmprsdinvprm from cmprsdlvl to cnfvarindex,ddvarindx
 }
@@ -195,7 +203,7 @@ void ADDSampler::createSamplingDAGs(const JoinNode* jNode){
 	if(!a->precompileSampleDAG) {
 		//cout<<"Not precompiling\n";
 	} else{
-		unordered_map<DdNode*, SamplerNode*> nodeMap;
+		//unordered_map<DdNode*, SamplerNode*> nodeMap;
 		SamplerNode* sNode = createSamplingDAG(a->cuadd.getNode() ,a, nodeMap);
 		rootSNMap[jNode] = sNode;
 	}
@@ -204,53 +212,6 @@ void ADDSampler::createSamplingDAGs(const JoinNode* jNode){
 	}
 }
 
-/*
-Can optimize this funcn by using iterators/pointers. Would help since its the innermost call. Leaving as-is for now
-since range checking is important at this stage
-*/
-WtType ADDSampler::computeFactor(Int startCmprsdLvl, Int endCmprsdLvl, bool tE, vector<Int>& compressedInvPerm){
-	// inner *2 since compressedInvPerm is stores two values (cnfvarind and ddvarind) per cmprsdLvl
-	// outer *3 since litWts is a vector storing three weights per index (then and tot and else)
-	Int thenWtIndex = compressedInvPerm.at(2*startCmprsdLvl)*3; 
-	WtType factor = tE? litWts.at(thenWtIndex): litWts.at(thenWtIndex+2);//*2 done previously
-	// cout<<"cmprsdperm size:"<<a.compressedInvPerm.size()<<"\n";
-	for (Int i = startCmprsdLvl+1; i < endCmprsdLvl; i++){
-		Int totWtIndex = compressedInvPerm.at(2*i) * 3 + 1;
-		#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2			
-			factor *= litWts.at(totWtIndex);
-		#else
-			factor += litWts.at(totWtIndex);
-		#endif
-	}
-	#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
-		assert(factor!=0);
-	#else
-		assert(factor!=-INF);
-	#endif
-	return factor;
-}
-
-void ADDSampler::sampleMissing(Set<Int>& notSampled){
-	for (auto& cnfvarind: notSampled){
-		#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
-			bool bit = rb.generateWeightedRandomBit(litWts.at(3*cnfvarind), litWts.at(3*cnfvarind+1));
-		#elif SAMPLE_NUM_TYPE == 1
-			bool bit = rb.generateWeightedRandomBit(exp10l(litWts.at(3*cnfvarind)), exp10l(litWts.at(3*cnfvarind+1)));
-		#endif
-		t->set(bit,cnfvarind);
-		numAssigned++;
-	}
-}
-
-/*
-Int cnfVarIndex = a.compressedInvPerm[2*i];
-Int ddVarIndex = a.compressedInvPerm[2*i+1];
-bool bit = rb.generateWeightedRandomBit(litWeights[cnfVarIndex],litWeights[-cnfVarIndex]);
-t->set(bit,cnfVarIndex);
-*/
-/*cofactor
-delete ADDs after construction of sampling struct
-*/
 SamplerNode* ADDSampler::createSamplingDAG(DdNode* node, Dd* a, unordered_map<DdNode*, SamplerNode*>& nodeMap){
 	assert(node!=NULL);
 	if (nodeMap.find(node)!=nodeMap.end()){ 
@@ -259,17 +220,10 @@ SamplerNode* ADDSampler::createSamplingDAG(DdNode* node, Dd* a, unordered_map<Dd
 	}
 	SamplerNode *sNode = NULL, *sNode_t = NULL, *sNode_e = NULL;
 	WtType wt = 0;
-	Int cmprsdLvl;
+	Int cnfVarID;
 	if (!Cudd_IsConstant(node)){
 		Int nodeInd = node->index;
-		if (a->compressedPerm.find(nodeInd)!=a->compressedPerm.end()){
-			cmprsdLvl = a->compressedPerm.at(nodeInd)<<1;
-		} else{
-			//for non-projectable vars, store cnfvarindex directly as negative.
-			//cnfvarids are already 1-indexed so won't clash with 0 of cmprsdlvls
-			//see header file comments for how the variable cmprsdLvl is interpreted
-			cmprsdLvl = -((ddVarToCnfVarMap.at(nodeInd))<<1); 
-		}
+		cnfVarID = ddVarToCnfVarMap.at(nodeInd);
 		sNode_t = createSamplingDAG(Cudd_T(node), a, nodeMap);
 		sNode_e = createSamplingDAG(Cudd_E(node), a, nodeMap);
 	} else{
@@ -290,68 +244,133 @@ SamplerNode* ADDSampler::createSamplingDAG(DdNode* node, Dd* a, unordered_map<Dd
 			#endif
 		}
 		
-		cmprsdLvl = (a->sampleStructDepth - 1)<<1; // leaf level should be equal to size of projectable vars, since cmprsdlvls are 0 indexed
+		cnfVarID = MAX_INT; // leaf level should be equal to size of projectable vars, since cmprsdlvls are 0 indexed
 	}
-	sNode = new SamplerNode(wt,sNode_t,sNode_e,cmprsdLvl);
+	sNode = new SamplerNode(wt,sNode_t,sNode_e,cnfVarID);
 	// sNode->dnode = node;
 	nodeMap.emplace(node, sNode);
 	return sNode;
 }
 
-Int ADDSampler::inplaceCofactor(SamplerNode* sNode, vector<Int>& compressedInvPerm){
+WtType ADDSampler::computeFactor(Int* sampleVarCNFIDs, Int currCNFVarID, Int** currVarPtr, bool tE){
+	// cout<<"currCNFVARID in computeFactor:"<<currCNFVarID<<" "<<std::flush;
+	WtType factor = tE? litWts.at(currCNFVarID*3):litWts.at(currCNFVarID*3+2);
+	(*currVarPtr)--; // see semantics (invaraints) of inpcf
+	while (**currVarPtr != currCNFVarID){
+		if (**currVarPtr == MIN_INT){
+			cout<<"ERROR: current cnfvarid "<<currCNFVarID<<" not found while computing factor. Exiting..\n";
+			exit(1);
+		}
+		#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2			
+			factor *= litWts.at(3*(**currVarPtr)+1);
+		#else
+			factor += litWts.at(3*(**currVarPtr)+1);
+		#endif
+		(*currVarPtr)--;
+	}
+	#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
+		assert(factor!=0);
+	#else
+		assert(factor!=-INF);
+	#endif
+	return factor;
+}
+
+void ADDSampler::seekForward(Int* sampleVarCNFIDs, Int currCNFVarID, Int** currVarPtr){
+	while (**currVarPtr != currCNFVarID && **currVarPtr != MAX_INT){
+		(*currVarPtr)++;
+	}
+}
+
+//TODO: seek forward to topmost samplevar or maxint
+//computefactor should decrement first then mulitply
+// nonsamplevar nodes should store original cnfvarid in auxvar and borrowed id in normal
+// uncofactor should restore correctcnfvarids for non-sample-varnodes
+// it needs to detect somehow that node is not-samplervar
+
+//invariant: currvarptr points to topmost samplevarcnfid (or maxint) in the subtree in samplecnfvarids when the function returns
+//invariant: for samplevarnodes, wt variable contains cumulative and scaled weight of subtree below that node
+//invariant: for non-samplevarnodes, wt variable containts cumulative weight of subtree below topmost samplevar below node
+// 			 in other words, for non-samplevarnodes, wt may not be scaled
+Int ADDSampler::inplaceCofactor(SamplerNode* sNode, Int* sampleCNFVarIDs, Int** currVarPtr){
+	// cout<<"Inside cofactor with value at currVarPtr at "<<**currVarPtr<<" .. "<<std::flush;
 	if (sNode->t==NULL){
 		//snode should be leaf
 		assert(sNode->e==NULL);
 		// assert(sNode->wt == Cudd_V(sNode->dnode));
-		return sNode->cmprsdLvl>>1;
+		seekForward(sampleCNFVarIDs,MAX_INT,currVarPtr);
+		return MAX_INT;
 	}
-	if (sNode->cmprsdLvl %2 != 0){ // node has been visited previously
-		if (sNode->cmprsdLvl < 0){ //its a prev sampled node
-			#if SAMPLE_NUM_TYPE != 2
-				return sNode->auxVar; //auxvar contains borrowed cmprsdlvl
-			#else
-				return sNode->auxVar.get_d(); //returns double which will be automatically casted to Int
-			#endif
+	if (sNode->cnfVarID < 0){ // node has been visited previously
+		if (!t->isSet(-(sNode->cnfVarID))){
+			//if node is samplevar then use its cnfvarid
+			seekForward(sampleCNFVarIDs,-(sNode->cnfVarID),currVarPtr);
+			return -(sNode->cnfVarID);
 		} else{
-			//assert(ddVarToCnfVarMap[sNode->dnode->index] == a.compressedInvPerm.at(2*((sNode->cmprsdLvl)>>1)));
-			return ((sNode->cmprsdLvl)>>1);
+			//else get borrowed cnfvarid stored in auxvar
+			Int borrowedCNFVARID;
+			#if SAMPLE_NUM_TYPE != 2
+				borrowedCNFVARID = sNode->auxVar;
+			#else
+				borrowedCNFVARID = sNode->auxVar.get_d(); //returns double which will be automatically casted to Int
+			#endif
+			seekForward(sampleCNFVarIDs,borrowedCNFVARID,currVarPtr);
+			return borrowedCNFVARID;
 		}
 	}
-	Int ret_cmprsdLvl;
+	Int ret_CnfVarID;
 	//if(cond is true), var is projectable at this node, therefore not previously assigned (will be assigned now)
-	if (sNode->cmprsdLvl >= 0){
-		Int trueCmprsdLvl = (sNode->cmprsdLvl)>>1;
-		// assert(ddVarToCnfVarMap[sNode->dnode->index] == a.compressedInvPerm.at(2*trueCmprsdLvl));
-		Int cmprsdLvl_t = inplaceCofactor(sNode->t, compressedInvPerm); // will need sn for leaf to access wt!
-		Int cmprsdLvl_e = inplaceCofactor(sNode->e, compressedInvPerm);
-		WtType tWt = sNode->t->wt, eWt = sNode->e->wt;
-		
+	if (!t->isSet(sNode->cnfVarID)){
+		// cout<<"Searching cnfVar "<<sNode->cnfVarID<<" "<<std::flush;
+		seekForward(sampleCNFVarIDs,sNode->cnfVarID,currVarPtr);
+		if (**currVarPtr == MAX_INT){
+			cout<<"ERROR: current node's cnfvarid "<<sNode->cnfVarID<<" not found while doing inplacecofactor. Exiting..\n";
+			exit(1);
+		}
+		// cout<<"Found cnfVar\n";
+		Int childCnfVarID;
 		#if SAMPLE_NUM_TYPE != 1
+			childCnfVarID = inplaceCofactor(sNode->t, sampleCNFVarIDs, currVarPtr);
+			WtType tFactor = computeFactor(sampleCNFVarIDs, sNode->cnfVarID, currVarPtr, true);
+			WtType tWt = sNode->t->wt;
 			if (tWt != 0) {
-				sNode->auxVar = tWt * computeFactor(trueCmprsdLvl, cmprsdLvl_t, true, compressedInvPerm);
+				sNode->auxVar = tWt * tFactor;
 			} else {
 				sNode->auxVar = 0;
 			}
+			childCnfVarID = inplaceCofactor(sNode->e, sampleCNFVarIDs, currVarPtr);
+			WtType eFactor = computeFactor(sampleCNFVarIDs, sNode->cnfVarID, currVarPtr, false);
+			WtType eWt = sNode->e->wt;
 			if (eWt != 0) {
-				sNode->wt = sNode->auxVar + eWt * computeFactor(trueCmprsdLvl, cmprsdLvl_e, false, compressedInvPerm);
+				sNode->wt = sNode->auxVar + eWt * eFactor;
 			} else {
 				sNode->wt = sNode->auxVar;
 			}
 		#else
 			bool thenIsZero = false;
+			// cout<<"Calling then-inpcf for curNodeID "<<sNode->cnfVarID<<".. "<<std::flush;
+			childCnfVarID = inplaceCofactor(sNode->t, sampleCNFVarIDs, currVarPtr);
+			//pulled this out of if-condition below, because computeFactor resets the currvarptr to cnfvarid
+			//which is needed for else cond also.
+			WtType tFactor = computeFactor(sampleCNFVarIDs, sNode->cnfVarID, currVarPtr, true);
+			WtType tWt = sNode->t->wt;
 			if (tWt != -INF) {
-				sNode->auxVar = tWt + computeFactor(trueCmprsdLvl, cmprsdLvl_t, true, compressedInvPerm);
+				sNode->auxVar = tWt + tFactor;
 			} else {
 				sNode->auxVar = -INF;
 				thenIsZero = true;
 			}
+			// cout<<"Calling else-inpcf for curNodeID "<<sNode->cnfVarID<<".. "<<std::flush;
+			childCnfVarID = inplaceCofactor(sNode->e, sampleCNFVarIDs, currVarPtr);
+			WtType eFactor = computeFactor(sampleCNFVarIDs, sNode->cnfVarID, currVarPtr, false);
+			WtType eWt = sNode->e->wt;
 			if (thenIsZero){
 				//if then is zero then we expect else to not be zero. This will be checked in randombits anyway.
-				sNode->wt = eWt + computeFactor(trueCmprsdLvl, cmprsdLvl_e, false, compressedInvPerm);
+				sNode->wt = eWt + eFactor;
 			} else {
 				if (eWt != -INF) {
 					// sNode->wt = sNode->auxVar + eWt * computeFactor(trueCmprsdLvl, cmprsdLvl_e, false, compressedInvPerm);
-					WtType op1 = sNode->auxVar, op2 =  eWt + computeFactor(trueCmprsdLvl, cmprsdLvl_e, false, compressedInvPerm);
+					WtType op1 = sNode->auxVar, op2 =  eWt + eFactor;
 					WtType opMax = fmaxl(op1, op2);
 					assert(op1!=-INF); assert(op2!=-INF); assert(opMax!=-INF);
 					sNode->wt = log10l(exp10l(op1 - opMax) + exp10l(op2 - opMax)) + opMax;
@@ -361,29 +380,24 @@ Int ADDSampler::inplaceCofactor(SamplerNode* sNode, vector<Int>& compressedInvPe
 				}
 			}
 		#endif
-		ret_cmprsdLvl = trueCmprsdLvl;
+		ret_CnfVarID = sNode->cnfVarID;
 	}
 	else {
-		// see headerfile and createSamplingDAG for the case where we store negative cnfvarids for non-samplevars
-		Int trueCNFVarIndex = ((-sNode->cmprsdLvl)>>1);
-		// assert(ddVarToCnfVarMap[sNode->dnode->index]==trueCNFVarIndex);
-		if (t->get(trueCNFVarIndex)){ //var assigned true;
-			ret_cmprsdLvl = inplaceCofactor(sNode->t, compressedInvPerm);
-			//Don't compute factor here. Instead set cmprsdLvl to that of child so that parent will take into account all
-			//intermediates
+		//dont compute factor for non-sample-var-nodes. It will be handled in samplevarnodes call to computefactor
+		if (t->get(sNode->cnfVarID)){ //var assigned true;
+			ret_CnfVarID = inplaceCofactor(sNode->t, sampleCNFVarIDs, currVarPtr);
 			sNode->wt = sNode->t->wt;
 		} else{//->var assigned false
-			ret_cmprsdLvl = inplaceCofactor(sNode->e, compressedInvPerm);
-			//Don't compute factor here. Instead set cmprsdLvl to that of child so that parent will take into account all
-			//intermediates
+			ret_CnfVarID = inplaceCofactor(sNode->e, sampleCNFVarIDs, currVarPtr);
 			sNode->wt = sNode->e->wt;
 		}
-		sNode->auxVar = (long) ret_cmprsdLvl; 
+		sNode->auxVar = (long) ret_CnfVarID;
 	}
 	// cout<<"before "<<sNode->cmprsdLvl;
-	sNode->cmprsdLvl |= 1LL; //set final bit to mark as visited
+	sNode->cnfVarID = -sNode->cnfVarID;// mark as visited
 	// cout<<"after "<<sNode->cmprsdLvl<<"\n";
-	return ret_cmprsdLvl;
+	// cout<<"Returning from inplacecofactor..\n";
+	return ret_CnfVarID;
 }
 
 WtType ADDSampler::sampleFromADD(SamplerNode* sNode, vector<Int>& compressedInvPerm, Set<Int>& notSampled){
@@ -393,9 +407,8 @@ WtType ADDSampler::sampleFromADD(SamplerNode* sNode, vector<Int>& compressedInvP
 		assert(sNode->e==NULL);
 		return sNode->wt;
 	}
-	assert(sNode->cmprsdLvl %2 != 0);
-	if (sNode->cmprsdLvl >= 0){//->var is not newly assigned but needs to be, i.e. its in projectable vars
-		Int cnfVarIndex = compressedInvPerm.at(2*(sNode->cmprsdLvl>>1));
+	assert(sNode->cnfVarID < 0);
+	if (!t->isSet(-sNode->cnfVarID)){//->var is not newly assigned but needs to be, i.e. its in projectable vars
 		// assert(ddVarToCnfVarMap[sNode->dnode->index]==cnfVarIndex);
 		#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
 			bool bit = rb.generateWeightedRandomBit(sNode->auxVar, sNode->wt); // arguments are poswt and totWt
@@ -403,16 +416,13 @@ WtType ADDSampler::sampleFromADD(SamplerNode* sNode, vector<Int>& compressedInvP
 			bool bit = rb.generateWeightedRandomBit(exp10l(sNode->auxVar), exp10l(sNode->wt)); // arguments are poswt and totWt
 			//bool bit = rb.generateWeightedRandomBit(exp10l(sNode->auxVar-sNode->wt), 1);
 		#endif
-		t->set(bit,cnfVarIndex);
-		assert(notSampled.erase(cnfVarIndex));
+		t->set(bit,-(sNode->cnfVarID));
+		assert(notSampled.erase(-(sNode->cnfVarID)));
 		numAssigned++;
 		return (bit? sampleFromADD(sNode->t, compressedInvPerm, notSampled): sampleFromADD(sNode->e, compressedInvPerm, notSampled));
 	} else{
-		// need to add one below, because negative numbers are stored as 2's complement
-		// setting final bit of 2's complement adds 1 to the number (ex: -8 becomes -7 after setting final bit)
-		Int trueCNFVarIndex = ((-sNode->cmprsdLvl)>>1)+1;
 		// assert(ddVarToCnfVarMap[sNode->dnode->index]==trueCNFVarIndex);
-		if (t->get(trueCNFVarIndex)){//var previously or newly assigned true, check t->get
+		if (t->get(-(sNode->cnfVarID))){//var previously or newly assigned true, check t->get
 			return sampleFromADD(sNode->t, compressedInvPerm, notSampled);
 		}
 		else{//->var previously assigned false
@@ -422,32 +432,44 @@ WtType ADDSampler::sampleFromADD(SamplerNode* sNode, vector<Int>& compressedInvP
 }
 
 void ADDSampler::inplaceUnCofactor(SamplerNode* sNode){
+	// cout<<"Uncofactoring.. "<<std::flush;
 	if (sNode->t==NULL){
 		//snode should be leaf
 		assert(sNode->e==NULL);
 		return; // no need to change anything for leaf
 	}
-	if (sNode->cmprsdLvl %2 == 0){ // node has been marked unvisited by uncofactor previously
+	if (sNode->cnfVarID > 0){ // node has been marked unvisited by uncofactor previously
 		return;
 	}
 	//if(cond is true), var is projectable at this node, therefore not previously assigned
-	if (sNode->cmprsdLvl >= 0){
-		inplaceUnCofactor(sNode->t); // will need sn for leaf to access wt!
-		inplaceUnCofactor(sNode->e);
-	} else {
-		// need to add one below, because negative numbers are stored as 2's complement
-		// setting final bit of 2's complement adds 1 to the number (ex: -8 becomes -7 after setting final bit)
-		Int trueCNFVarIndex = ((-sNode->cmprsdLvl)>>1)+1;
-		// assert(ddVarToCnfVarMap[sNode->dnode->index]==trueCNFVarIndex);
-		if (t->get(trueCNFVarIndex)){ //var assigned true;
-			inplaceUnCofactor(sNode->t);
-		} else{//->var assigned false
-			inplaceUnCofactor(sNode->e);
-		} 
-	}
+	// if (!t->isSet(-(sNode->cnfVarID))){
+	// 	inplaceUnCofactor(sNode->t); // will need sn for leaf to access wt!
+	// 	inplaceUnCofactor(sNode->e);
+	// } else {
+	// 	// assert(ddVarToCnfVarMap[sNode->dnode->index]==trueCNFVarIndex);
+	// 	if (t->get(-(sNode->cnfVarID))){ //var assigned true;
+	// 		inplaceUnCofactor(sNode->t);
+	// 	} else{//->var assigned false
+	// 		inplaceUnCofactor(sNode->e);
+	// 	} 
+	// }
+	inplaceUnCofactor(sNode->t); // will need sn for leaf to access wt!
+	inplaceUnCofactor(sNode->e);
 	// cout<<"Before: "<<sNode->cmprsdLvl<<std::flush;
-	sNode->cmprsdLvl &= (~1LL); //set final bit to mark as unvisited
+	sNode->cnfVarID = -(sNode->cnfVarID); //mark as unvisited
 	// cout<<"After: "<<sNode->cmprsdLvl<<"\n";
+}
+
+void ADDSampler::sampleMissing(Set<Int>& notSampled){
+	for (auto& cnfvarind: notSampled){
+		#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
+			bool bit = rb.generateWeightedRandomBit(litWts.at(3*cnfvarind), litWts.at(3*cnfvarind+1));
+		#elif SAMPLE_NUM_TYPE == 1
+			bool bit = rb.generateWeightedRandomBit(exp10l(litWts.at(3*cnfvarind)), exp10l(litWts.at(3*cnfvarind+1)));
+		#endif
+		t->set(bit,cnfvarind);
+		numAssigned++;
+	}
 }
 
 Asmt& ADDSampler::drawSample(){
@@ -465,10 +487,15 @@ void ADDSampler::drawSample_rec(const JoinNode* jNode){
 		return;
 	}
 	Dd* a = (Dd*)jNode->dd;
-	//cout<<"starting sampling from add\n";
+	// cout<<"starting sampling from add\n";
 	Set<Int> notSampledVars(jNode->projectionVars);
+	a->curVarPtr = a->sampleVarCNFIDs+1;
+	// for(Int i = 0; i<a->sampleStructDepth-1; i++){
+	// 	cout << a->sampleVarCNFIDs[i+1]<<" ";
+	// }
+	// cout<<"\n";
 	// cout<<"! "<<std::flush;
-	inplaceCofactor(rootSNMap.at(jNode), a->compressedInvPerm);
+	inplaceCofactor(rootSNMap.at(jNode), a->sampleVarCNFIDs, &(a->curVarPtr));
 	// cout<<"!! "<<std::flush;
 	// cout<<"Sampling from "<<jNode->getNodeIndex()+1<<"\n";
 	WtType leafVal = sampleFromADD(rootSNMap.at(jNode), a->compressedInvPerm, notSampledVars);

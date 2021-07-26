@@ -41,8 +41,12 @@ cnf = cnf2
 
 cmd1 = os.environ['DPSAMPLER']+'/lg/build/lg "lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < '+cnf+' > tree.tmp'
 cmd2 = os.environ['DPSAMPLER']+' DMC/dmc --cf='+cnf+' --cs='+cs+' --sf='+sf+'< tree.tmp'
-cmd3 = os.environ['DPSAMPLER']+'lg/build/lg "'+os.environ['DPSAMPLER']+'lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < '+cnf+' | '+os.environ['DPSAMPLER']+'dmc/dmc --pw=70 --cf='+cnf+' --lc=1 --wc=1 --cs='+cs+' --sf='+sf+' --ns='+str(ns)
+cmd3 = os.environ['DPSAMPLER']+'lg/build/lg "'+os.environ['DPSAMPLER']+'lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < '+cnf+' | '+os.environ['DPSAMPLER']+'dmc/dmc --pw=0 --cf='+cnf+' --lc=1 --wc=1 --cs='+cs+' --sf='+sf+' --ns='+str(ns)
 print cmd3
 os.system(cmd3)
 #print cmd2
 #os.system(cmd2)
+'''
+$DPSAMPLER/lg/build/lg "$DPSAMPLER/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < test.cnf | $DPSAMPLER/dmc/dmc --pw 0 --cf test.cnf --cs c
+$DPSAMPLER/lg/build/lg "$DPSAMPLER/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < converted_benchmarks/enc1/avgdeg_3_016_1.txt.cnf | $DPSAMPLER/dmc/dmc --pw 0 --cf converted_benchmarks/enc1/avgdeg_3_016_1.txt.cnf --cs c --jp a --dp s --lc 0 --tc 0 
+'''

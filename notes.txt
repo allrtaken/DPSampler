@@ -1,3 +1,31 @@
+sampling was bottleneck in previous version because of frequent dynamic alloc dealloc of mem.. removed that with new framework
+discuss results
+waps has errors but time still ok
+still potential to make it faster and even possibly speed up add compilation and use sylvan
+	would prefer to work on tool more, but aaai deadline is close
+for paper is conceptual contribution enough?
+	not sure the new framework can be really elaborated in aaai -- for sat might have been fine
+show versatility of ADDs?
+	Bayes benchmarks from kuldeep
+	Linear extensions
+SAT MCW talk
+
+
+tree width analysis. even for other benchmarks
+look up tree of bdds
+https://www.aaai.org/Papers/AAAI/2007/AAAI07-079.pdf
+
+
+
+http://users.cecs.anu.edu.au/~ssanner/Papers/Decision_Diagrams_Tutorial.pdf
+Approximate Policy Construction Using Decision Diagrams
+
+
+
+
+
+
+===================================================================================================
 To discuss with Moshe
 	speed on example benchmarks, profiling results
 	all benchmarks have large number of nodes in jt.. even if treewidth is small. So number of cofactorings is large. TraceSampling did not suffer as much from this problem.
@@ -47,7 +75,10 @@ TODO / To think (immediate to long term)
 			need to check if node has been visited previously -- can use sign bit of cnfvarid
 			need to computeFactor with intermediate skipped sample levels --?
 				keep sorted list of cnfvarids per add and maintainpointer to current lvl in that list and update pointer when current node is not a samplevar
-			
+		
+		get rid of cmprsdLvl cmprsdPerm etc just need ddvar to cnfvar bimap. keep auxvar since mem is not an issue so far -- later can think of normalizing all weights so that need to store only then-weight and no need for auxvar. inplacecofactor reutrns weight of subtree. callers job to do computeFactor. 
+		Non samplevar node doesnt need to have wt or auxvar variable? Define two types of sampler nodes -- one with and one without wt? no -- nodes can be shared.. so not samplevar in one can be samplevar in another .. so wts for all
+		so at non-samplernode just return the weight that was returned from child. computefactor will only be called by samplervarnode. just store cnfvarids per ADD and look up weights in computefactor and move pointer
 			
 	make log counting default in both count and sample
 	valgrind dpmc on some moderate benchmark .. see how much time the weighted abstract takes. See if you can get time tkaen for a particualr line in code
