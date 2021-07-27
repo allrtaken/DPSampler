@@ -874,13 +874,15 @@ Number Executor::solveCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>& 
 }
 
 Number Executor::sampleCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>& cnfVarToDdVarMap, const vector<Int>& ddVarToCnfVarMap, Int sliceVarOrderHeuristic){
-  assert(ddPackage != SYLVAN); //not implemented yet
+  // assert(ddPackage != SYLVAN); //not implemented yet
   assert(JoinNode::cnf.declaredVarCount == JoinNode::cnf.additiveVars.size()); //exist-var processing not implemented yet
   Float threadMem = maxMem;
-  const Cudd* mgr = Dd::newMgr(threadMem, 0); // thread index is 0 since only 1 thread
+  const Cudd* mgr = ddPackage == CUDD? Dd::newMgr(threadMem, 0) : nullptr; // thread index is 0 since only 1 thread
   TimePoint preADDCompilationPoint = util::getTimePoint();
   util::printRow("Total pre-(ADD-compilation) Time:",util::getDuration(toolStartPoint));
-  Number apparentSolution = solveSubtree(static_cast<const JoinNode*>(joinRoot), cnfVarToDdVarMap, ddVarToCnfVarMap, mgr).extractConst();
+  Number apparentSolution;
+  apparentSolution = solveSubtree(static_cast<const JoinNode*>(joinRoot), cnfVarToDdVarMap, ddVarToCnfVarMap, mgr).extractConst();
+
   TimePoint postADDCompilationPoint = util::getTimePoint();
   util::printRow("ADD-Compilation Time:",util::getDuration(preADDCompilationPoint));  
   /*set freevars*/
@@ -1195,8 +1197,8 @@ OptionDict::OptionDict(int argc, char** argv) {
 
     countOrSample = result[COUNT_OR_SAMPLE_OPTION].as<char>(); //global var
     if (countOrSample == 's'){
-      util::printComment("countOrSample set to sample. Setting ddPackage to CUDD (Sylvan sampling not supported yet)");
-      ddPackage = CUDD;
+      util::printComment("countOrSample set to sample."); // Setting ddPackage to CUDD (Sylvan sampling not supported yet)");
+      // ddPackage = CUDD;
     } else if(countOrSample == 'c'){
       util::printComment("countOrSample set to count");
     } else {

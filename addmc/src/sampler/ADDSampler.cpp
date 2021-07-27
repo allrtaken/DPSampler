@@ -18,9 +18,12 @@ using Sampler::Asmt;
 using Sampler::ADDSampler;
 using Sampler::SamplerNode;
 using Sampler::WtType;
+using Sampler::SamplerUtils;
 
 extern Int samplePrec;
 extern const Float INF;
+extern bool multiplePrecision;
+bool Sampler::usingCUDD = true;
 
 void Asmt::set(bool bit, Int i){
 	assert(bits.at(i)==-1); //sampling is generally not the bottleneck so leaving asserts in place
@@ -52,12 +55,210 @@ void Asmt::clear(){
 	}
 }
 
+double_t SamplerUtils::getLog(mpz_t inputNum){
+	mpf_t mylog, fU;
+	int nBits, decimal_prec;
+	decimal_prec = 67;
+	nBits = 3.3* decimal_prec;
+	nBits += nBits/2.0; //padding
+	mpf_set_default_prec(nBits);
+	
+	mpf_init(mylog);
+	mpf_init(fU);
+	mpf_set_z(fU,inputNum);
+	
+	fp_log(mylog,fU,decimal_prec);
+	mpf_t ln2;
+	mpf_init(ln2);
+	fp_log2(ln2,decimal_prec);
+	mpf_div(mylog,mylog,ln2);
+	double_t result = mpf_get_d(mylog);
+	mpf_clear(mylog);
+	mpf_clear(fU);
+	mpf_clear(ln2);
+	return result;
+}
+
+// following taken from https://github.com/linas/anant/tree/master/src
+// int and unsigned int changed to uint32_t
+
+void SamplerUtils::fp_epsilon (mpf_t eps, uint32_t prec)
+{
+	static int cache_prec = -1;
+	static mpf_t cache_eps;
+
+	if (-1 == cache_prec)
+	{
+		mpf_init (cache_eps);
+	}
+
+	if (prec == cache_prec)
+	{
+		mpf_set (eps, cache_eps);
+		return;
+	}
+	if (cache_prec < prec)
+	{
+		mpf_set_prec (cache_eps, 3.322*prec+50);
+	}
+
+	/* double mex = ((double) prec) * log (10.0) / log(2.0); */
+	double mex = ((double) prec) * 3.321928095;
+	unsigned int imax = (unsigned int) (mex +1.0);
+	mpf_t one;
+	mpf_init (one);
+	mpf_set_ui (one, 1);
+	mpf_div_2exp (cache_eps, one, imax);
+
+	mpf_set (eps, cache_eps);
+	cache_prec = prec;
+	mpf_clear (one);
+}
+
+void SamplerUtils::fp_log_m1 (mpf_t lg, const mpf_t z, uint32_t prec)
+{
+	mp_bitcnt_t bits = ((double_t) prec) * 3.322 + 50;
+	mpf_t zee, z_n, term;
+
+	mpf_init2 (zee, bits);
+	mpf_init2 (z_n, bits);
+	mpf_init2 (term, bits);
+
+	/* Make copy of argument now! */
+	mpf_set (zee, z);
+	mpf_mul (z_n, zee, zee);
+	mpf_set (lg, zee);
+
+	/* Use 10^{-prec} for smallest term in sum */
+	mpf_t maxterm;
+	mpf_init2 (maxterm, bits);
+	fp_epsilon (maxterm, prec);
+
+	uint32_t n=2;
+	while(1)
+	{
+		mpf_div_ui (term, z_n, n);
+		mpf_add (lg, lg, term);
+
+		/* don't go no farther than this */
+		mpf_abs (term, term);
+		if (mpf_cmp (term, maxterm) < 0) break;
+
+		n ++;
+		mpf_mul (z_n, z_n, zee);
+	}
+
+	mpf_clear (zee);
+	mpf_clear (z_n);
+	mpf_clear (term);
+
+	mpf_clear (maxterm);
+}
+
+void SamplerUtils::fp_log2 (mpf_t l2, uint32_t prec)
+{
+	// lines not commented since static required since mutually recursive with fp_log
+	static uint32_t precision=0;
+	static mpf_t cached_log2;
+
+	//pthread_spin_lock(&mp_const_lock);
+	if (precision >= prec)
+	{
+		mpf_set (l2, cached_log2);
+		//pthread_spin_unlock(&mp_const_lock);
+		return;
+	}
+
+	if (0 == precision)
+	{
+		mpf_init (cached_log2);
+	}
+	mp_bitcnt_t bits = ((double_t) prec) * 3.322 + 50;
+	mpf_set_prec (cached_log2, bits);
+
+	mpf_t two;
+	mpf_init2 (two, bits);
+	mpf_set_ui (two, 2);
+	fp_log (cached_log2, two, prec);
+	mpf_set (l2, cached_log2);
+
+	mpf_clear (two);
+	precision = prec;
+	//pthread_spin_unlock(&mp_const_lock);
+}
+
+void SamplerUtils::fp_log (mpf_t lg, const mpf_t z, uint32_t prec)
+{
+	mp_bitcnt_t bits = ((double_t) prec) * 3.322 + 50;
+	mpf_t zee;
+	mpf_init2 (zee, bits);
+	mpf_set (zee, z);
+	int32_t nexp = 0;
+
+	/* Assume branch cut in the usual location, viz
+	 * along negative z axis */
+	if (mpf_cmp_ui(zee, 0) <= 0)
+	{
+		fprintf(stderr, "Error: bad domain for fp_log: log(%g)\n",
+			mpf_get_d(zee));
+		mpf_clear (zee);
+		exit (1);
+	}
+
+	/* Find power of two by means of bit-shifts */
+	while (mpf_cmp_ui(zee, 2) > 0)
+	{
+		nexp ++;
+		mpf_div_ui (zee, zee, 2);
+	}
+
+	while (mpf_cmp_ui(zee, 1) < 0)
+	{
+		nexp --;
+		mpf_mul_ui (zee, zee, 2);
+	}
+
+	/* Apply simple-minded series summation
+	 * This appears to be faster than the Feynman algorithm
+	 * for the types of numbers and precisions I'm encountering. */
+	if (mpf_cmp_d(zee, 1.618) > 0)
+	{
+		mpf_ui_div (zee, 1, zee);
+		mpf_ui_sub (zee, 1, zee);
+		fp_log_m1 (lg, zee, prec);
+	}
+	else
+	{
+		mpf_ui_sub (zee, 1, zee);
+		fp_log_m1 (lg, zee, prec);
+		mpf_neg (lg, lg);
+	}
+
+	/* Add log (2^n) = n log (2) to result. */
+	if (0 != nexp)
+	{
+		fp_log2 (zee, prec);
+		if (0 > nexp)
+		{
+			mpf_mul_ui (zee, zee, -nexp);
+			mpf_neg (zee, zee);
+		}
+		else
+		{
+			mpf_mul_ui (zee, zee, nexp);
+		}
+		mpf_add (lg,lg, zee);
+	}
+
+	mpf_clear (zee);
+}
+
 Sampler::SamplerNode::SamplerNode(WtType wt_, SamplerNode* t_, SamplerNode* e_, Int cnfVarID_): wt(wt_), t(t_), e(e_), 
 	cnfVarID(cnfVarID_), auxVar(1) {}
 
 ADDSampler::ADDSampler(const JoinNode *root_, const Cudd* mgr_ , Int nTotalVars_, Int nApparentVars_, unordered_map<Int,Int> c2DVarMap, vector<Int> d2CVarMap,
 	unordered_map<Int, Number> litWeights_, Set<Int> freeVars_,	bool checkAsmts_): cnfVarToDdVarMap(c2DVarMap), ddVarToCnfVarMap(d2CVarMap), 
-	litWts(litWeights_.size()*3/2+3), freeVars(freeVars_), checkAsmts(checkAsmts_), jtRoot(root_), mgr(*mgr_), nTotalVars(nTotalVars_),
+	litWts(litWeights_.size()*3/2+3), freeVars(freeVars_), checkAsmts(checkAsmts_), jtRoot(root_), nTotalVars(nTotalVars_),
 	nApparentVars(nApparentVars_){
 	
 	rb.SeedEngine();
@@ -86,31 +287,51 @@ ADDSampler::ADDSampler(const JoinNode *root_, const Cudd* mgr_ , Int nTotalVars_
 	util::printComment("Note: This determines how the weights for the sampler are computed. "
 	"This is independent of logCounting or multiprecision flags of dmc which are only used for ADD-construction.");
 	for(Int i = 1; i<=nTotalVars;i++){
+		if (!multiplePrecision){
+			#if SAMPLE_NUM_TYPE == 0
+				litWts.at(3*i) = litWeights_.at(i).fraction;
+				litWts.at(3*i+1) = litWeights_.at(i).fraction+litWeights_.at(-i).fraction;
+				litWts.at(3*i+2) = litWeights_.at(-i).fraction;
+			#elif SAMPLE_NUM_TYPE == 1
+				litWts.at(3*i) = log10l(litWeights_.at(i).fraction);
+				litWts.at(3*i+1) = log10l(litWeights_.at(i).fraction+litWeights_.at(-i).fraction);
+				litWts.at(3*i+2) = log10l(litWeights_.at(-i).fraction);
+			#elif SAMPLE_NUM_TYPE == 2
+				/*Cast to double because MPF does not have constructors for long double*/
+				litWts.at(3*i) = (double)litWeights_.at(i).fraction;
+				litWts.at(3*i+1) = (double) (litWeights_.at(i)+litWeights_.at(-i)).fraction;
+				litWts.at(3*i+2) = (double) (litWeights_.at(-i)).fraction;
+				//litWts.at(2*i).canonicalize();
+			#endif
+		} else {
+			#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
+				litWts.at(3*i) = litWeights_.at(i).quotient.get_d();
+				litWts.at(3*i+1) = litWeights_.at(i).quotient.get_d()+litWeights_.at(-i).quotient.get_d();
+				litWts.at(3*i+2) = litWeights_.at(-i).quotient.get_d();
+			#elif SAMPLE_NUM_TYPE == 1
+				litWts.at(3*i) = log10l(litWeights_.at(i).quotient.get_d());
+				litWts.at(3*i+1) = log10l(litWeights_.at(i).quotient.get_d()+litWeights_.at(-i).quotient.get_d());
+				litWts.at(3*i+2) = log10l(litWeights_.at(-i).quotient.get_d());
+			#endif
+		}
 		
-		#if SAMPLE_NUM_TYPE == 0
-			litWts.at(3*i) = litWeights_.at(i).fraction;
-			litWts.at(3*i+1) = litWeights_.at(i).fraction+litWeights_.at(-i).fraction;
-			litWts.at(3*i+2) = litWeights_.at(-i).fraction;
-		#elif SAMPLE_NUM_TYPE == 1
-			litWts.at(3*i) = log10l(litWeights_.at(i).fraction);
-			litWts.at(3*i+1) = log10l(litWeights_.at(i).fraction+litWeights_.at(-i).fraction);
-			litWts.at(3*i+2) = log10l(litWeights_.at(-i).fraction);
-		#elif SAMPLE_NUM_TYPE == 2
-			/*Cast to double because MPF does not have constructors for long double*/
-			litWts.at(3*i) = (double)litWeights_.at(i).fraction;
-			litWts.at(3*i+1) = (double) (litWeights_.at(i)+litWeights_.at(-i)).fraction;
-			litWts.at(3*i+2) = (double) (litWeights_.at(-i)).fraction;
-			//litWts.at(2*i).canonicalize();
-		#endif
 	}
 	// cout<<"\n";
+	// exit(1);
+	if (nullptr == mgr_){
+		usingCUDD = false;
+	} else{
+		mgr = *mgr_;
+	}
 	for (Int i = 0; i<nApparentVars; i++){
-		assert(mgr.ReadPerm(i)==i);
-		//cout<<i<<" "<<mgr.ReadPerm(i)<<"\n";
+		if (usingCUDD)
+			assert(mgr.ReadPerm(i)==i);
+		
 		//this is because dpmc maintains mapping between cnfvars and ddvars instead of using cudd_addpermute
 		//so index and levels of all ddvars should be same. 
 		//this is different from tracesampler which used permute
 		//therefore all code here is written under assumption that index and levels are same for all ddvars
+		//no need to check for sylvan as it does not support dyn var ordering
 	}
 	assert(nApparentVars+freeVars.size()==nTotalVars);
 	numAssigned = 0;
@@ -204,7 +425,11 @@ void ADDSampler::createSamplingDAGs(const JoinNode* jNode){
 		//cout<<"Not precompiling\n";
 	} else{
 		//unordered_map<DdNode*, SamplerNode*> nodeMap;
-		SamplerNode* sNode = createSamplingDAG(a->cuadd.getNode() ,a, nodeMap);
+		SamplerNode* sNode;
+		if (usingCUDD)
+			sNode = createSamplingDAG(a->cuadd.getNode() ,a);
+		else
+			sNode = createSamplingDAG(a->mtbdd.GetMTBDD() ,a);
 		rootSNMap[jNode] = sNode;
 	}
 	for (auto child: jNode->children){
@@ -212,10 +437,57 @@ void ADDSampler::createSamplingDAGs(const JoinNode* jNode){
 	}
 }
 
-SamplerNode* ADDSampler::createSamplingDAG(DdNode* node, Dd* a, unordered_map<DdNode*, SamplerNode*>& nodeMap){
+SamplerNode* ADDSampler::createSamplingDAG(MTBDD node, Dd* a){
+	if (nodeMap_sylvan.find(MTBDD_GETNODE(node))!=nodeMap_sylvan.end()){ 
+		SamplerNode* snode = nodeMap_sylvan.at(MTBDD_GETNODE(node));
+		return snode;
+	}
+	SamplerNode *sNode = NULL, *sNode_t = NULL, *sNode_e = NULL;
+	WtType wt = 0;
+	Int cnfVarID;
+	if (!mtbdd_isleaf(node)){
+		Int nodeInd = mtbdd_getvar(node);
+		cnfVarID = ddVarToCnfVarMap.at(nodeInd);
+		sNode_t = createSamplingDAG(mtbdd_gethigh(node), a);
+		sNode_e = createSamplingDAG(mtbdd_getlow(node), a);
+	} else{
+		if (multiplePrecision){
+			SamplerUtils s;
+			mpq_class num = mpq_class((mpq_ptr)mtbdd_getvalue(node));
+			// num.canonicalize();
+			#if SAMPLE_NUM_TYPE == 0
+				wt = num.get_d();
+			#elif SAMPLE_NUM_TYPE == 2
+				wt = num;
+			#else
+				if (num == 0){
+					wt = -INF;
+				} else{
+					double_t numLog = s.getLog(num.get_num_mpz_t());
+					double_t denLog = s.getLog(num.get_den_mpz_t()); 
+					wt = (numLog-denLog)/log2(10);
+				}
+			#endif
+		} else {
+			#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
+				wt = mtbdd_getdouble(node);	
+			#else
+				wt = log10l(mtbdd_getdouble(node));
+			#endif
+		}
+		
+		cnfVarID = MAX_INT; // leaf level should be equal to size of projectable vars, since cmprsdlvls are 0 indexed
+	}
+	sNode = new SamplerNode(wt,sNode_t,sNode_e,cnfVarID);
+	// sNode->dnode = node;
+	nodeMap_sylvan.emplace(MTBDD_GETNODE(node), sNode);
+	return sNode;
+}
+
+SamplerNode* ADDSampler::createSamplingDAG(DdNode* node, Dd* a){
 	assert(node!=NULL);
-	if (nodeMap.find(node)!=nodeMap.end()){ 
-		SamplerNode* snode = nodeMap.at(node);
+	if (nodeMap_cudd.find(node)!=nodeMap_cudd.end()){ 
+		SamplerNode* snode = nodeMap_cudd.at(node);
 		return snode;
 	}
 	SamplerNode *sNode = NULL, *sNode_t = NULL, *sNode_e = NULL;
@@ -224,8 +496,8 @@ SamplerNode* ADDSampler::createSamplingDAG(DdNode* node, Dd* a, unordered_map<Dd
 	if (!Cudd_IsConstant(node)){
 		Int nodeInd = node->index;
 		cnfVarID = ddVarToCnfVarMap.at(nodeInd);
-		sNode_t = createSamplingDAG(Cudd_T(node), a, nodeMap);
-		sNode_e = createSamplingDAG(Cudd_E(node), a, nodeMap);
+		sNode_t = createSamplingDAG(Cudd_T(node), a);
+		sNode_e = createSamplingDAG(Cudd_E(node), a);
 	} else{
 		if (logCounting){
 			#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
@@ -248,7 +520,7 @@ SamplerNode* ADDSampler::createSamplingDAG(DdNode* node, Dd* a, unordered_map<Dd
 	}
 	sNode = new SamplerNode(wt,sNode_t,sNode_e,cnfVarID);
 	// sNode->dnode = node;
-	nodeMap.emplace(node, sNode);
+	nodeMap_cudd.emplace(node, sNode);
 	return sNode;
 }
 
@@ -256,6 +528,7 @@ WtType ADDSampler::computeFactor(Int* sampleVarCNFIDs, Int currCNFVarID, Int** c
 	// cout<<"currCNFVARID in computeFactor:"<<currCNFVarID<<" "<<std::flush;
 	WtType factor = tE? litWts.at(currCNFVarID*3):litWts.at(currCNFVarID*3+2);
 	(*currVarPtr)--; // see semantics (invaraints) of inpcf
+	// cout<<factor<<" "<<std::flush;
 	while (**currVarPtr != currCNFVarID){
 		if (**currVarPtr == MIN_INT){
 			cout<<"ERROR: current cnfvarid "<<currCNFVarID<<" not found while computing factor. Exiting..\n";
@@ -265,6 +538,7 @@ WtType ADDSampler::computeFactor(Int* sampleVarCNFIDs, Int currCNFVarID, Int** c
 			factor *= litWts.at(3*(**currVarPtr)+1);
 		#else
 			factor += litWts.at(3*(**currVarPtr)+1);
+			// cout<<litWts.at(3*(**currVarPtr)+1)<<" "<<std::flush;
 		#endif
 		(*currVarPtr)--;
 	}

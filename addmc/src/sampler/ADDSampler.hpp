@@ -12,11 +12,22 @@
 #include "../logic.hh"
 #include "../Dd.hh"
 
+#include "../../libraries/sylvan/src/sylvan_mtbdd.h"
+#include "../../libraries/sylvan/src/sylvan_int.h"
+
 using std::vector;
 using std::unordered_set;
 using std::string;
 using std::unordered_map;
 //using Sampler::SamplerNodeFactory;
+
+using sylvan::MTBDD;
+using sylvan::mtbdd_isleaf;
+using sylvan::mtbdd_gethigh;
+using sylvan::mtbdd_getlow;
+using sylvan::mtbdd_getvar;
+using sylvan::MTBDD_GETNODE;
+using sylvan::mtbddnode_t;
 
 namespace Sampler{
 #if SAMPLE_NUM_TYPE == 2
@@ -24,6 +35,7 @@ namespace Sampler{
 #else
 	typedef Float WtType;
 #endif
+extern bool usingCUDD;
 
 class Asmt{
 	public:
@@ -37,6 +49,16 @@ class Asmt{
 		bool isSet(Int i);
 	private:
 		vector<int8_t> bits; //not bool becz need to have 3rd 'unset' value (defined to be -1)
+};
+
+class SamplerUtils{
+	public:
+	double_t getLog(mpz_t inputNum);
+	void fp_epsilon (mpf_t eps, uint32_t prec);
+	void fp_log_m1 (mpf_t lg, const mpf_t z, uint32_t prec);
+	void fp_log2 (mpf_t l2, uint32_t prec);
+	void fp_log (mpf_t lg, const mpf_t z, uint32_t prec);
+
 };
 
 /*
@@ -74,7 +96,8 @@ class ADDSampler{
 		void createAuxStructures(const JoinNode*);
 		void createAuxStructure(const JoinNode*);
 		void createSamplingDAGs(const JoinNode*);
-		SamplerNode* createSamplingDAG(DdNode* node, Dd* dd, unordered_map<DdNode*, SamplerNode*>&);
+		SamplerNode* createSamplingDAG(DdNode* node, Dd* dd);
+		SamplerNode* createSamplingDAG(MTBDD node, Dd* a);
 		WtType sampleFromADD(SamplerNode*, vector<Int>&, Set<Int>&);
 		void drawSample_rec(const JoinNode*);		
 		double getAsmtVal(Dd*);
@@ -103,7 +126,8 @@ class ADDSampler{
 		//unordered_map<Int, Float> litWeights;
 		vector<WtType> litWts;
 		unordered_map<const JoinNode*, SamplerNode*> rootSNMap;
-		unordered_map<DdNode*, SamplerNode*> nodeMap;
+		unordered_map<DdNode*, SamplerNode*> nodeMap_cudd;
+		unordered_map<mtbddnode_t, SamplerNode*> nodeMap_sylvan;
 		Set<Int> freeVars;
 		//Float testNum, testDen;
 

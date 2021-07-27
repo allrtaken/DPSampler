@@ -63,7 +63,16 @@ To ask Vu:
 ====================================================================================================
 TODO / To think (immediate to long term)
 ====================================================================================================
-
+	
+	ask moshe about matteo riondato not communicating after obtaining tool
+	
+	sylvan multithreaded keeps cpu usage 800 even when sampling (after add construction and samplestruct constructions have ended). Why? How to stop multithreading while constructing samplestructs?
+	write check, sylvan integration, run tests, cleanup code, push
+		cleanup includes removing invperm etc, couts, 
+	rerun exps
+		waps timing including time since start for compilation
+		convert uai benchmarks
+		
 	nodes can be shared across ADDs. So in createSampleDAG you can keep a global hashtable to not have to process nodes already processed in previous add
 	will need to store cnfvarids (or ddvarids) in samplernodes because nodes will be shared across adds, and different adds will have different cmprsdlvls for same nodes
 	then question is how to efficiently get intermediate skipped sample vars for computing factor. is auxvar needed or can do without?

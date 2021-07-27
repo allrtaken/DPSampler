@@ -63,7 +63,7 @@ logic.o: src/logic.cc src/logic.hh
 	g++ src/logic.cc -c $(ASSEMBLY_OPTIONS)
 
 ADDSampler.o: src/sampler/ADDSampler.cpp src/sampler/ADDSampler.hpp
-	g++ src/sampler/ADDSampler.cpp -c $(ASSEMBLY_OPTIONS) $(SAMPLER_OPTIONS)
+	g++ src/sampler/ADDSampler.cpp -c $(SYLVAN_INCLUSIONS) $(ASSEMBLY_OPTIONS) $(SAMPLER_OPTIONS)
 
 RandomBits.o: src/sampler/RandomBits.cpp src/sampler/RandomBits.hpp
 	g++ src/sampler/RandomBits.cpp -c $(ASSEMBLY_OPTIONS) $(SAMPLER_OPTIONS)
