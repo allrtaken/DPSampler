@@ -882,7 +882,10 @@ Number Executor::sampleCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>&
   util::printRow("Total pre-(ADD-compilation) Time:",util::getDuration(toolStartPoint));
   Number apparentSolution;
   apparentSolution = solveSubtree(static_cast<const JoinNode*>(joinRoot), cnfVarToDdVarMap, ddVarToCnfVarMap, mgr).extractConst();
-
+  if (ddPackage == SYLVAN){
+    cout<<"Suspending lace..\n";
+    lace_suspend();
+  }
   TimePoint postADDCompilationPoint = util::getTimePoint();
   util::printRow("ADD-Compilation Time:",util::getDuration(preADDCompilationPoint));  
   /*set freevars*/

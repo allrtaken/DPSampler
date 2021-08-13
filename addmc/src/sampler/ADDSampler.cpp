@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <random>
 #include <cassert>
+#include <iostream>
 
 #include "ADDSampler.hpp"
 
@@ -343,7 +344,6 @@ void ADDSampler::buildDataStructures(){
 	//printComment("#nodes in JoinTree:"+to_string(jtRoot->getNodeCount()));
 	util::printComment("Building aux structures..  ",0,0);
 	createAuxStructures(jtRoot);
-	// allAuxStructsTime = util::getTimePoint();
 	util::printComment("Built all aux structures!",0,1,false);
 	util::printComment("Building sampling DAGs..  ",0,0);
 	createSamplingDAGs(jtRoot);
