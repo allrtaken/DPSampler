@@ -17,10 +17,11 @@ class RandomBits {
 		mt19937 randomEngine{};
 		mt19937_64 randomEngine2{};
 		gmp_randclass g;
+		void seedEngine(std::random_device&);
+		void seedEngine2(std::random_device&);
 	public:
+		void seedEngines();
 		RandomBits();
-		void SeedEngine();
-		void SeedEngine2();
 		string GenerateRandomBits(uint32_t size);
 		bool generateWeightedRandomBit(long double posWt, long double totWt);
 		//bool generateMPFWeightedRandomBit(mpf_class& posWt, mpf_class& totWt);

@@ -6,9 +6,8 @@
 #include <iostream>
 #include <cassert>
 
-RandomBits::RandomBits(): g(gmp_randinit_default) {
+RandomBits::RandomBits(): g(gmp_randinit_default) {}
 
-}
 string RandomBits::binary(unsigned x, uint32_t length)
 {
     uint32_t logSize = (x == 0 ? 1 : log2(x) + 1);
@@ -65,29 +64,32 @@ bool RandomBits::generateWeightedRandomBit(mpf_class& posWt, mpf_class& totWt){
     }
 }
 
-void RandomBits::SeedEngine() {
+void RandomBits::seedEngine(std::random_device& rd) {
 	
     /* Initialize PRNG with seed from random_device */
-    std::random_device rd{};
+    //std::random_device rd{};
     std::array<int, 10> seedArray;
     std::generate_n(seedArray.data(), seedArray.size(), std::ref(rd));
     std::seed_seq seed(std::begin(seedArray), std::end(seedArray));
     randomEngine.seed(seed);
 }
 
-void RandomBits::SeedEngine2() {
+void RandomBits::seedEngine2(std::random_device& rd) {
 	
     /* Initialize PRNG with seed from random_device */
-    std::random_device rd{};
+    //std::random_device rd{};
     std::array<int, 10> seedArray;
     std::generate_n(seedArray.data(), seedArray.size(), std::ref(rd));
     std::seed_seq seed(std::begin(seedArray), std::end(seedArray));
     randomEngine2.seed(seed);
-    #ifdef DGMP
-        g.seed(rd());
-    #endif
 }
 
+void RandomBits::seedEngines() {
+    std::random_device rd{};    
+    seedEngine(rd);
+    seedEngine2(rd);
+    g.seed(rd());
+}
 uint64_t RandomBits::getRandInt(std::uniform_int_distribution<uint64_t>& uid){
 	return uid(randomEngine);
 }

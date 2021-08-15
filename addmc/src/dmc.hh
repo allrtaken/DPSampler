@@ -153,6 +153,10 @@ public:
   static Map<Int, Float> varDurations; // cnfVar |-> total execution time in seconds
   static Map<Int, size_t> varDdSizes; // cnfVar |-> max ADD size
 
+  static TimePoint preADDCompilationPoint;
+  static Int joinNodeCount;
+  static Int joinNodesProcessed;
+
   static void updateVarDurations(const JoinNode* joinNode, TimePoint startPoint);
   static void updateVarDdSizes(const JoinNode* joinNode, const Dd& dd);
 

@@ -37,9 +37,6 @@ public:
   Mtbdd mtbdd; // Sylvan
 
   /*Sampler*/
-  std::unordered_map<Int, Int> compressedPerm; // stores mapping from ddvarids to compressed-ddvarids/cmprsdlevels
-  vector<Int> compressedInvPerm; // stores mapping from compressedddvarids/cmprsdlvls to cnfvarid,ddvarid pair
-  //not explicitly storing mapping from compressed to uncompressed ddvarids. go through cnfvarids for that
   Int* sampleVarCNFIDs;
   Int* curVarPtr;
   Int sampleStructDepth;

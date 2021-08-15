@@ -262,8 +262,7 @@ ADDSampler::ADDSampler(const JoinNode *root_, const Cudd* mgr_ , Int nTotalVars_
 	litWts(litWeights_.size()*3/2+3), freeVars(freeVars_), checkAsmts(checkAsmts_), jtRoot(root_), nTotalVars(nTotalVars_),
 	nApparentVars(nApparentVars_){
 	
-	rb.SeedEngine();
-	rb.SeedEngine2();
+	rb.seedEngines();
 	litWts.at(0) = -1;
 	litWts.at(1) = -1;
 	litWts.at(2) = -1;
@@ -390,14 +389,14 @@ void ADDSampler::createAuxStructure(const JoinNode* jNode){
 	sort(ind_level_map.begin(),ind_level_map.end());
 	//compress and insert o(n) 
 	
-	a->compressedInvPerm.resize(numPVars*2);
+	// a->compressedInvPerm.resize(numPVars*2);
 	a->sampleVarCNFIDs = new Int[numPVars+2]; //+2 sentinels
 	a->sampleVarCNFIDs[0] = MIN_INT;
 	for(int i = 0; i< numPVars; i++){
 		a->sampleVarCNFIDs[i+1] = ind_level_map.at(i).index;
-		a->compressedPerm[ind_level_map.at(i).level] = i; //cmprsdperm stores mapping from ddvarid to cmprsdlevl
-		a->compressedInvPerm.at(2*i) = ind_level_map.at(i).index;
-		a->compressedInvPerm.at(2*i+1) = ind_level_map.at(i).level;
+		// a->compressedPerm[ind_level_map.at(i).level] = i; //cmprsdperm stores mapping from ddvarid to cmprsdlevl
+		// a->compressedInvPerm.at(2*i) = ind_level_map.at(i).index;
+		// a->compressedInvPerm.at(2*i+1) = ind_level_map.at(i).level;
 	}
 	a->sampleVarCNFIDs[numPVars+1] = MAX_INT;
 	a->curVarPtr = a->sampleVarCNFIDs+1;
@@ -556,16 +555,12 @@ void ADDSampler::seekForward(Int* sampleVarCNFIDs, Int currCNFVarID, Int** currV
 	}
 }
 
-//TODO: seek forward to topmost samplevar or maxint
-//computefactor should decrement first then mulitply
-// nonsamplevar nodes should store original cnfvarid in auxvar and borrowed id in normal
-// uncofactor should restore correctcnfvarids for non-sample-varnodes
-// it needs to detect somehow that node is not-samplervar
 
 //invariant: currvarptr points to topmost samplevarcnfid (or maxint) in the subtree in samplecnfvarids when the function returns
 //invariant: for samplevarnodes, wt variable contains cumulative and scaled weight of subtree below that node
 //invariant: for non-samplevarnodes, wt variable containts cumulative weight of subtree below topmost samplevar below node
 // 			 in other words, for non-samplevarnodes, wt may not be scaled
+//returning correct cnfvarid is important because we use the returned value for setting auxvar in non-samplevarnodes
 Int ADDSampler::inplaceCofactor(SamplerNode* sNode, Int* sampleCNFVarIDs, Int** currVarPtr){
 	// cout<<"Inside cofactor with value at currVarPtr at "<<**currVarPtr<<" .. "<<std::flush;
 	if (sNode->t==NULL){
@@ -643,7 +638,6 @@ Int ADDSampler::inplaceCofactor(SamplerNode* sNode, Int* sampleCNFVarIDs, Int** 
 				sNode->wt = eWt + eFactor;
 			} else {
 				if (eWt != -INF) {
-					// sNode->wt = sNode->auxVar + eWt * computeFactor(trueCmprsdLvl, cmprsdLvl_e, false, compressedInvPerm);
 					WtType op1 = sNode->auxVar, op2 =  eWt + eFactor;
 					WtType opMax = fmaxl(op1, op2);
 					assert(op1!=-INF); assert(op2!=-INF); assert(opMax!=-INF);
@@ -667,14 +661,12 @@ Int ADDSampler::inplaceCofactor(SamplerNode* sNode, Int* sampleCNFVarIDs, Int** 
 		}
 		sNode->auxVar = (long) ret_CnfVarID;
 	}
-	// cout<<"before "<<sNode->cmprsdLvl;
 	sNode->cnfVarID = -sNode->cnfVarID;// mark as visited
-	// cout<<"after "<<sNode->cmprsdLvl<<"\n";
 	// cout<<"Returning from inplacecofactor..\n";
 	return ret_CnfVarID;
 }
 
-WtType ADDSampler::sampleFromADD(SamplerNode* sNode, vector<Int>& compressedInvPerm, Set<Int>& notSampled){
+WtType ADDSampler::sampleFromADD(SamplerNode* sNode, Set<Int>& notSampled){
 	if (sNode->t==NULL){
 		//snode should be leaf
 		// assert(sNode->wt == Cudd_V(sNode->dnode));
@@ -683,24 +675,21 @@ WtType ADDSampler::sampleFromADD(SamplerNode* sNode, vector<Int>& compressedInvP
 	}
 	assert(sNode->cnfVarID < 0);
 	if (!t->isSet(-sNode->cnfVarID)){//->var is not newly assigned but needs to be, i.e. its in projectable vars
-		// assert(ddVarToCnfVarMap[sNode->dnode->index]==cnfVarIndex);
 		#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
 			bool bit = rb.generateWeightedRandomBit(sNode->auxVar, sNode->wt); // arguments are poswt and totWt
 		#else
 			bool bit = rb.generateWeightedRandomBit(exp10l(sNode->auxVar), exp10l(sNode->wt)); // arguments are poswt and totWt
-			//bool bit = rb.generateWeightedRandomBit(exp10l(sNode->auxVar-sNode->wt), 1);
 		#endif
 		t->set(bit,-(sNode->cnfVarID));
 		assert(notSampled.erase(-(sNode->cnfVarID)));
 		numAssigned++;
-		return (bit? sampleFromADD(sNode->t, compressedInvPerm, notSampled): sampleFromADD(sNode->e, compressedInvPerm, notSampled));
+		return (bit? sampleFromADD(sNode->t, notSampled): sampleFromADD(sNode->e, notSampled));
 	} else{
-		// assert(ddVarToCnfVarMap[sNode->dnode->index]==trueCNFVarIndex);
 		if (t->get(-(sNode->cnfVarID))){//var previously or newly assigned true, check t->get
-			return sampleFromADD(sNode->t, compressedInvPerm, notSampled);
+			return sampleFromADD(sNode->t, notSampled);
 		}
 		else{//->var previously assigned false
-			return sampleFromADD(sNode->e, compressedInvPerm, notSampled);
+			return sampleFromADD(sNode->e, notSampled);
 		}
 	}
 }
@@ -715,18 +704,6 @@ void ADDSampler::inplaceUnCofactor(SamplerNode* sNode){
 	if (sNode->cnfVarID > 0){ // node has been marked unvisited by uncofactor previously
 		return;
 	}
-	//if(cond is true), var is projectable at this node, therefore not previously assigned
-	// if (!t->isSet(-(sNode->cnfVarID))){
-	// 	inplaceUnCofactor(sNode->t); // will need sn for leaf to access wt!
-	// 	inplaceUnCofactor(sNode->e);
-	// } else {
-	// 	// assert(ddVarToCnfVarMap[sNode->dnode->index]==trueCNFVarIndex);
-	// 	if (t->get(-(sNode->cnfVarID))){ //var assigned true;
-	// 		inplaceUnCofactor(sNode->t);
-	// 	} else{//->var assigned false
-	// 		inplaceUnCofactor(sNode->e);
-	// 	} 
-	// }
 	inplaceUnCofactor(sNode->t); // will need sn for leaf to access wt!
 	inplaceUnCofactor(sNode->e);
 	// cout<<"Before: "<<sNode->cmprsdLvl<<std::flush;
@@ -772,7 +749,7 @@ void ADDSampler::drawSample_rec(const JoinNode* jNode){
 	inplaceCofactor(rootSNMap.at(jNode), a->sampleVarCNFIDs, &(a->curVarPtr));
 	// cout<<"!! "<<std::flush;
 	// cout<<"Sampling from "<<jNode->getNodeIndex()+1<<"\n";
-	WtType leafVal = sampleFromADD(rootSNMap.at(jNode), a->compressedInvPerm, notSampledVars);
+	WtType leafVal = sampleFromADD(rootSNMap.at(jNode), notSampledVars);
 	// cout<<"!!! "<<std::flush;
 	sampleMissing(notSampledVars);
 	// cout<<"!!!! "<<std::flush;
@@ -814,9 +791,15 @@ double ADDSampler::getAsmtVal(Dd* a){
 
 void ADDSampler::writeAsmtToFile(FILE* ofp){
 	for(Int i = 1; i<nTotalVars+1; i++){
-		fprintf(ofp,"%d ",t->get(i));
+		if(fprintf(ofp,"%d ",t->get(i))<0){
+   			util::printComment("ERROR: write to sample file failed. Exiting..");
+    		exit (1);
+  		}
 	}
-	fprintf(ofp,"\n");
+	if(fprintf(ofp,"\n")<0){
+		util::printComment("ERROR: write to sample file failed. Exiting..");
+		exit (1);
+	}
 	static Int cnt = 0;
 	cnt ++;
 }

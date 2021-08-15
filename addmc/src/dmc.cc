@@ -611,6 +611,9 @@ void Dd::writeInfoFile(const Cudd* mgr, string filePath) {
 
 Map<Int, Float> Executor::varDurations;
 Map<Int, size_t> Executor::varDdSizes;
+Int Executor::joinNodeCount;
+Int Executor::joinNodesProcessed;
+TimePoint Executor::preADDCompilationPoint;
 
 void Executor::updateVarDurations(const JoinNode* joinNode, TimePoint startPoint) {
   if (verboseProfiling >= 1) {
@@ -694,6 +697,8 @@ Dd Executor::solveSubtree(const JoinNode* joinNode, const Map<Int, Int>& cnfVarT
     updateVarDurations(joinNode, terminalStartPoint);
     updateVarDdSizes(joinNode, d);
 
+    joinNodesProcessed ++;
+    if (((joinNodesProcessed-1)%(std::max((joinNodeCount/10),1LL)))==1) util::printComment(to_string(joinNodesProcessed)+"/"+to_string(joinNodeCount)+":"+to_string(util::getDuration(preADDCompilationPoint))+" ",0,0,false);
     return d;
   }
 
@@ -742,6 +747,8 @@ Dd Executor::solveSubtree(const JoinNode* joinNode, const Map<Int, Int>& cnfVarT
   updateVarDurations(joinNode, nonterminalStartPoint);
   updateVarDdSizes(joinNode, dd);
 
+  joinNodesProcessed ++;
+  if (((joinNodesProcessed-1)%(std::max((joinNodeCount/10),1LL)))==1) util::printComment(to_string(joinNodesProcessed)+"/"+to_string(joinNodeCount)+":"+to_string(util::getDuration(preADDCompilationPoint))+" ",0,0,false);
   return dd;
 }
 
@@ -878,9 +885,12 @@ Number Executor::sampleCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>&
   assert(JoinNode::cnf.declaredVarCount == JoinNode::cnf.additiveVars.size()); //exist-var processing not implemented yet
   Float threadMem = maxMem;
   const Cudd* mgr = ddPackage == CUDD? Dd::newMgr(threadMem, 0) : nullptr; // thread index is 0 since only 1 thread
-  TimePoint preADDCompilationPoint = util::getTimePoint();
+  preADDCompilationPoint = util::getTimePoint();
   util::printRow("Total pre-(ADD-compilation) Time:",util::getDuration(toolStartPoint));
   Number apparentSolution;
+  util::printComment("ADD Compilation Progress: ",0,0);
+  joinNodeCount = JoinNode::nodeCount;
+  joinNodesProcessed = 0;
   apparentSolution = solveSubtree(static_cast<const JoinNode*>(joinRoot), cnfVarToDdVarMap, ddVarToCnfVarMap, mgr).extractConst();
   if (ddPackage == SYLVAN){
     cout<<"Suspending lace..\n";
@@ -903,7 +913,14 @@ Number Executor::sampleCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>&
 	util::printRow("Sampler Compilation Time:",util::getDuration(postADDCompilationPoint));
   util::printComment("Starting Sampling to file "+sampleFile+" ..");
   FILE* ofp = fopen(sampleFile.c_str(),"w");
-	fprintf(ofp,"%s %lld %lld\n",sampleFile.c_str(), JoinNode::cnf.declaredVarCount, numSamples);
+  if (ofp == NULL) {
+    util::printComment("ERROR: Could not open file to write samples to: "+sampleFile+". Exiting..");
+    exit (1);
+  }
+	if(fprintf(ofp,"%s %lld %lld\n",sampleFile.c_str(), JoinNode::cnf.declaredVarCount, numSamples)<0){
+    util::printComment("ERROR: write to sample file failed. Exiting..");
+    exit (1);
+  }
   a.sampleAndWriteToFile(ofp, numSamples, true);
   fclose(ofp);
   util::printComment("Done Sampling!");

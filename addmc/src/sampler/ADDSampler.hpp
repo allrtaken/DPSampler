@@ -61,13 +61,9 @@ class SamplerUtils{
 
 };
 
-/*
-sign of cmprsdLvl stores whether nodevar is part of sample-set (+ve sign) or if it is previously assigned (-ve sign)
-if its in sample-set (+ve), we store cmprsdLvl in var cmprsdLvl, other wise we store cnfvarindex.
-We use least significant bit of cmprsdLvl to store whether the SamplerNode has been visited previously (by inplacecofactor).
-inplacecofactor sets this bit after visiting the node, and inplaceuncofactor resets it
-In order to accommodate this bit, we left shift (multiply by two) cmprsdLvl/cnfvarindex before storing in cmprsdLvl
-*/
+//sign of cnfvarid denotes if the node has been visited previously or not
+//auxvar technically not required if we normalize wts to 1. But currently memory is not an issue and
+//storing borrowed cnfvarid (see below) is helpful
 class SamplerNode{
 	public:
 	SamplerNode(WtType, SamplerNode*, SamplerNode*, Int);
@@ -75,8 +71,8 @@ class SamplerNode{
 	SamplerNode* t;
 	SamplerNode* e;
 	Int cnfVarID;
-	//if node var is part of sampleset, auxvar stores wt*factor of 'then' branch, 
-	//if node var is previously assigned, auxvar stores inherited cmprsdLvl from appropriate child node
+	//auxvar stores wt of then branch for fast random sampling. In case of non-samplevarnodes it stores borrowed
+	//cnfvarid from child
 	WtType auxVar; 
 	// DdNode* dnode;
 };
@@ -98,7 +94,7 @@ class ADDSampler{
 		void createSamplingDAGs(const JoinNode*);
 		SamplerNode* createSamplingDAG(DdNode* node, Dd* dd);
 		SamplerNode* createSamplingDAG(MTBDD node, Dd* a);
-		WtType sampleFromADD(SamplerNode*, vector<Int>&, Set<Int>&);
+		WtType sampleFromADD(SamplerNode*, Set<Int>&);
 		void drawSample_rec(const JoinNode*);		
 		double getAsmtVal(Dd*);
 		//WtType inplaceCofactor(SamplerNode*, vector<Int>&);
@@ -120,7 +116,7 @@ class ADDSampler{
 		const JoinNode* jtRoot;
 		unordered_map<Int, Int> cnfVarToDdVarMap;
 		vector<Int> ddVarToCnfVarMap;
-		ADD assignedVarsCube;
+		// ADD assignedVarsCube;
 		int numAssigned;
 		Cudd mgr;
 		//unordered_map<Int, Float> litWeights;
