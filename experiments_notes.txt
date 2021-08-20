@@ -1,3 +1,11 @@
+problem with nots and waps.. both unstable
+	waps does things very inefficiently.. poorly written code .. not just because of python
+	waps writes nnfs to disk and reads from them .. on nots this is a problem. writing to disks are failing unpredictably, so redirected to other places but they're slow.. substantially slow
+	 for ex: for or-50-10-7.cnf it took only 18 secs to compile the ddnnf in memory but 100 seconds to write.. extreme overhead. Seeing this pattern in all experiments I have run.
+	 waps also does a poor job of generating and writing samples.. it forms them all in memory (taking lot of space) then writes one by one instead of writing on the fly.
+	 Not really a fair comparison. How to present?
+
+
 results for waps
 	673 bayes have "samples saved to"
 	556 pseudoweighted have "samples saved to"

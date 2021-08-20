@@ -1,3 +1,18 @@
+add check for proj vars union not equal to apparent vars
+rerun with correct timeout and time!
+reserve space for unorderedmap
+check best way to store pointers in hashmap
+use mm for cudd also
+dont use jp=a. s
+
+verify that tobdds and ddnnfs are incomparable ie exponentially succinct either way
+rewrite vskipped notation in algos 
+write proofs 
+assertion numvars=assigned is failing for binsearch.16.pp.cnf in pseudowtd among others. was getting assertion failed even for previous commit of dmc. maybe non-apparent vars are not being sampled?
+dmc is getting oom error in new commit version for bayes . it didnt get oom in older version. why?
+timelimit time commands not on dmc! they are on lg! i thought i had corrected that.. check
+hashmap size when constructing sampledags is getting large? thats why bad alloc errors?
+
 one possibility was to store with each ADD an array of totWts of all samplevars in that ADD so that computefactor can easily traverse that array. The pointer on that array can be updated with the pointer for samplervarcnfids array. Decided against this mainly because time is limited and benefits are not guaranteed (i.e. will need lot of testing to see if its worth it). In particular, totwts come into play when samplevars are skipped in the add, and in other cases then and else wts are used. Its not clear if storing only totWts is worth it. can store all 3, but then memory overhead will be more. So avoiding for now at least.. also because ADD construction is typically the bottleneck rather than sampling.
 
 another possibility was to store borrowed cnfvarids in cnfvarid variable and to store original cnfvarid in auxvar for non-samplevarnodes during cofactor and to restore it uncofactor. This would have saved a check in cofactor function but would have added overhead in uncofactor. so avoiding for now.

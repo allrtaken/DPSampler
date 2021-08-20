@@ -879,7 +879,17 @@ Number Executor::solveCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>& 
 
   return totalSolution;
 }
-
+Int Executor::countSylvanNodes(const JoinNode* node){
+  static Int totCount = 0;
+  Dd* a = (Dd*)node->dd;
+  if(a!=NULL){
+    totCount += a->countNodes();
+  }
+  for(auto& child: node->children){
+    countSylvanNodes(child);
+  }
+  return totCount;
+}
 Number Executor::sampleCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>& cnfVarToDdVarMap, const vector<Int>& ddVarToCnfVarMap, Int sliceVarOrderHeuristic){
   // assert(ddPackage != SYLVAN); //not implemented yet
   assert(JoinNode::cnf.declaredVarCount == JoinNode::cnf.additiveVars.size()); //exist-var processing not implemented yet
@@ -892,12 +902,19 @@ Number Executor::sampleCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>&
   joinNodeCount = JoinNode::nodeCount;
   joinNodesProcessed = 0;
   apparentSolution = solveSubtree(static_cast<const JoinNode*>(joinRoot), cnfVarToDdVarMap, ddVarToCnfVarMap, mgr).extractConst();
-  if (ddPackage == SYLVAN){
-    cout<<"Suspending lace..\n";
-    lace_suspend();
-  }
+  util::printComment("",0,1,false);
   TimePoint postADDCompilationPoint = util::getTimePoint();
-  util::printRow("ADD-Compilation Time:",util::getDuration(preADDCompilationPoint));  
+  util::printRow("ADD-Compilation Time:",util::getDuration(preADDCompilationPoint));
+  Int ddNodeCount = 0;
+  if (ddPackage == SYLVAN){
+    util::printComment("Counting sylvan nodes ..",0,0);
+    ddNodeCount = countSylvanNodes(static_cast<const JoinNode*>(joinRoot));
+    util::printComment(" Suspending lace.",0,1,false);
+    lace_suspend();
+  } else{
+    util::printComment("Counting cudd nodes ..",0,1);
+    ddNodeCount = (mgr->getManager()->keys) - (mgr->getManager()->dead) + 50;
+	}  
   /*set freevars*/
   Set<Int> freeVars;
   for (Int var = 1; var <= JoinNode::cnf.declaredVarCount; var++) { // processes hidden existential vars
@@ -906,7 +923,7 @@ Number Executor::sampleCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>&
     }
   }
   
-  Sampler::ADDSampler a(static_cast<const JoinNode*>(joinRoot), mgr, JoinNode::cnf.declaredVarCount, JoinNode::cnf.apparentVars.size(), cnfVarToDdVarMap, ddVarToCnfVarMap, 
+  Sampler::ADDSampler a(static_cast<const JoinNode*>(joinRoot), mgr, JoinNode::cnf.declaredVarCount, JoinNode::cnf.apparentVars, ddNodeCount, cnfVarToDdVarMap, ddVarToCnfVarMap, 
 			JoinNode::cnf.literalWeights, freeVars, true);
   a.buildDataStructures();
   TimePoint postSamplerCompilationPoint = util::getTimePoint();
@@ -1023,10 +1040,14 @@ void Executor::printSolutionRows(const Number& solution, bool surelyUnsat, size_
   printTypeRow(keyWidth);
   printEstRow(n, keyWidth);
 
+  // Original dpmc printed garbage count for apparent solutions and s arb frac when multiprecision 
+  // and weighted counting were set to true, because the model-counting format had this undefined
+  // since it does not affect anything else, we just print -1 for apparent solutions and not print 
+  // s arb frac
   if (multiplePrecision) {
     printArbRow(n, false, keyWidth); // notation = weighted ? int : float
     if (weightedCounting) {
-      printArbRow(n, true, keyWidth); // notation = frac
+      //printArbRow(n, true, keyWidth); // notation = frac
     }
   }
   else {
@@ -1061,11 +1082,14 @@ Executor::Executor(const JoinNonterminal* joinRoot, Int ddVarOrderHeuristic, Int
 
   printVarDurations();
   printVarDdSizes();
-
+  // Original dpmc printed garbage count for apparent solutions and s arb frac when multiprecision 
+  // and weighted counting were set to true, because the model-counting format had this undefined
+  // since it does not affect anything else, we just print -1 for apparent solutions and not print 
+  // s arb frac
   if (verboseSolving >= 1) {
-    util::printRow("apparentSolution", logCounting ? exp10l(n.fraction) : n);
+    util::printRow("apparentSolution", logCounting ? exp10l(n.fraction) : multiplePrecision? mpq_class(-1) : n);
   }
-
+    
   printSolutionRows(n);
 }
 

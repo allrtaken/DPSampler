@@ -257,11 +257,12 @@ void SamplerUtils::fp_log (mpf_t lg, const mpf_t z, uint32_t prec)
 Sampler::SamplerNode::SamplerNode(WtType wt_, SamplerNode* t_, SamplerNode* e_, Int cnfVarID_): wt(wt_), t(t_), e(e_), 
 	cnfVarID(cnfVarID_), auxVar(1) {}
 
-ADDSampler::ADDSampler(const JoinNode *root_, const Cudd* mgr_ , Int nTotalVars_, Int nApparentVars_, unordered_map<Int,Int> c2DVarMap, vector<Int> d2CVarMap,
+ADDSampler::ADDSampler(const JoinNode *root_, const Cudd* mgr_ , Int nTotalVars_, Set<Int> apparentVars_, Int ddNodeCount_, unordered_map<Int,Int> c2DVarMap, vector<Int> d2CVarMap,
 	unordered_map<Int, Number> litWeights_, Set<Int> freeVars_,	bool checkAsmts_): cnfVarToDdVarMap(c2DVarMap), ddVarToCnfVarMap(d2CVarMap), 
 	litWts(litWeights_.size()*3/2+3), freeVars(freeVars_), checkAsmts(checkAsmts_), jtRoot(root_), nTotalVars(nTotalVars_),
-	nApparentVars(nApparentVars_){
+	apparentVars(apparentVars_), ddNodeCount(ddNodeCount_){
 	
+	nApparentVars = apparentVars.size();
 	rb.seedEngines();
 	litWts.at(0) = -1;
 	litWts.at(1) = -1;
@@ -343,10 +344,34 @@ void ADDSampler::buildDataStructures(){
 	//printComment("#nodes in JoinTree:"+to_string(jtRoot->getNodeCount()));
 	util::printComment("Building aux structures..  ",0,0);
 	createAuxStructures(jtRoot);
+	if(allProjVars.size()<nApparentVars){
+		util::printComment("ERROR: Not all apparentVars are being projected in the project join tree");
+		util::printComment("Following apparentVars are not being projected",0,0);
+		for(auto& elem: apparentVars){
+			if (!allProjVars.contains(elem)){
+				util::printComment(" "+to_string(elem),0,0,false);
+				// freeVars.insert(elem);
+			}
+		}
+		util::printComment(" Exiting",0,1,false);
+		exit(1);
+	}	
 	util::printComment("Built all aux structures!",0,1,false);
+	if(usingCUDD){
+		util::printComment("Reserving "+to_string(ddNodeCount)+" entries in hash for CUDD");
+		nodeMap_cudd.reserve(ddNodeCount);
+	} else{
+		util::printComment("Reserving at least 3/4th of "+to_string(ddNodeCount)+" entries for Sylvan (as it is an estimate)");
+		nodeMap_sylvan.reserve(std::min(1000LL,ddNodeCount*3/4));
+	}
 	util::printComment("Building sampling DAGs..  ",0,0);
 	createSamplingDAGs(jtRoot);
 	util::printComment("Built sampling DAGs!",0,1,false);
+	if(usingCUDD){
+		util::printComment("Number of entries in hash: "+to_string(nodeMap_cudd.size()));
+	} else{
+		util::printComment("Number of entries in hash: "+to_string(nodeMap_sylvan.size()));
+	}
 	util::printComment("Finished building all Datastructures!");
 }
 
@@ -406,6 +431,7 @@ void ADDSampler::createAuxStructure(const JoinNode* jNode){
 
 void ADDSampler::createAuxStructures(const JoinNode* jNode){
 	createAuxStructure(jNode);
+	allProjVars.insert(jNode->projectionVars.begin(),jNode->projectionVars.end());
 	for (auto child: jNode->children){
 		createAuxStructures(child);
 	}
@@ -414,22 +440,24 @@ void ADDSampler::createAuxStructures(const JoinNode* jNode){
 void ADDSampler::createSamplingDAGs(const JoinNode* jNode){
 	//cout<<"Creating sampling structure..\n";
 	assert(jNode!=NULL);
-	if (jNode->projectionVars.size()==0){
+	if (jNode->projectionVars.size()!=0){
 		//cout<<"Sampling DAG skipped because projvar size is 0\n";
-		return;
-	}
-	Dd* a = (Dd*)jNode->dd;
-	assert(a!=NULL);
-	if(!a->precompileSampleDAG) {
-		//cout<<"Not precompiling\n";
-	} else{
-		//unordered_map<DdNode*, SamplerNode*> nodeMap;
-		SamplerNode* sNode;
-		if (usingCUDD)
-			sNode = createSamplingDAG(a->cuadd.getNode() ,a);
-		else
-			sNode = createSamplingDAG(a->mtbdd.GetMTBDD() ,a);
-		rootSNMap[jNode] = sNode;
+		Dd* a = (Dd*)jNode->dd;
+		assert(a!=NULL);
+		if(!a->precompileSampleDAG) {
+			//cout<<"Not precompiling\n";
+		} else{
+			//unordered_map<DdNode*, SamplerNode*> nodeMap;
+			SamplerNode* sNode;
+			if (usingCUDD){
+				sNode = createSamplingDAG(a->cuadd.getNode() ,a);
+			} else{
+				// LACE_ME;
+				// sylvan_gc();
+				sNode = createSamplingDAG(a->mtbdd.GetMTBDD() ,a);
+			}
+			rootSNMap[jNode] = sNode;
+		}
 	}
 	for (auto child: jNode->children){
 		createSamplingDAGs(child);
@@ -729,42 +757,43 @@ Asmt& ADDSampler::drawSample(){
 	sampleMissing(freeVars);
 	//cout<<"Set all freeVars!\n";	
 	drawSample_rec(jtRoot);
+	// cout<<numAssigned<<" "<<nTotalVars<<"\n";
 	assert(numAssigned==nTotalVars);
 	return *t;
 }
 
 void ADDSampler::drawSample_rec(const JoinNode* jNode){
-	if (jNode->projectionVars.size()==0){
-		return;
-	}
-	Dd* a = (Dd*)jNode->dd;
-	// cout<<"starting sampling from add\n";
-	Set<Int> notSampledVars(jNode->projectionVars);
-	a->curVarPtr = a->sampleVarCNFIDs+1;
-	// for(Int i = 0; i<a->sampleStructDepth-1; i++){
-	// 	cout << a->sampleVarCNFIDs[i+1]<<" ";
-	// }
-	// cout<<"\n";
-	// cout<<"! "<<std::flush;
-	inplaceCofactor(rootSNMap.at(jNode), a->sampleVarCNFIDs, &(a->curVarPtr));
-	// cout<<"!! "<<std::flush;
-	// cout<<"Sampling from "<<jNode->getNodeIndex()+1<<"\n";
-	WtType leafVal = sampleFromADD(rootSNMap.at(jNode), notSampledVars);
-	// cout<<"!!! "<<std::flush;
-	sampleMissing(notSampledVars);
-	// cout<<"!!!! "<<std::flush;
-	inplaceUnCofactor(rootSNMap.at(jNode));
-	// cout<<"!!!!! "<<std::flush;
-	// Float checkVal = getAsmtVal(a);
-	#if SAMPLE_NUM_TYPE != 1
-		if (leafVal == 0){
-	#else 
-		if (leafVal == -INF){
-	#endif
-		cout<<"While checking sample for add reached leaf with value "<<leafVal<<"\n";
-		exit(1);
-	} else {
-		//cout<<"SampleADD passed!\n";
+	if (jNode->projectionVars.size()!=0){
+			
+		Dd* a = (Dd*)jNode->dd;
+		// cout<<"starting sampling from add\n";
+		Set<Int> notSampledVars(jNode->projectionVars);
+		a->curVarPtr = a->sampleVarCNFIDs+1;
+		// for(Int i = 0; i<a->sampleStructDepth-1; i++){
+		// 	cout << a->sampleVarCNFIDs[i+1]<<" ";
+		// }
+		// cout<<"\n";
+		// cout<<"! "<<std::flush;
+		inplaceCofactor(rootSNMap.at(jNode), a->sampleVarCNFIDs, &(a->curVarPtr));
+		// cout<<"!! "<<std::flush;
+		// cout<<"Sampling from "<<jNode->getNodeIndex()+1<<"\n";
+		WtType leafVal = sampleFromADD(rootSNMap.at(jNode), notSampledVars);
+		// cout<<"!!! "<<std::flush;
+		sampleMissing(notSampledVars);
+		// cout<<"!!!! "<<std::flush;
+		inplaceUnCofactor(rootSNMap.at(jNode));
+		// cout<<"!!!!! "<<std::flush;
+		// Float checkVal = getAsmtVal(a);
+		#if SAMPLE_NUM_TYPE != 1
+			if (leafVal == 0){
+		#else 
+			if (leafVal == -INF){
+		#endif
+			cout<<"While checking sample for add reached leaf with value "<<leafVal<<"\n";
+			exit(1);
+		} else {
+			//cout<<"SampleADD passed!\n";
+		}
 	}
 	for(auto child: jNode->children){
 		drawSample_rec(child);

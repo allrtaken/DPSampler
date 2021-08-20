@@ -203,7 +203,7 @@ public:
     const vector<Int>& ddVarToCnfVarMap,
     Int sliceVarOrderHeuristic
   );
-
+  static Int countSylvanNodes(const JoinNode* node);
   static Number adjustSolution(const Number &apparentSolution); // takes into account hidden vars
 
   static void printSatRow(const Number& solution, bool surelyUnsat, size_t keyWidth); // "s {satisfiability}"
