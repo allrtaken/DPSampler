@@ -453,7 +453,7 @@ Dd Dd::getConstDd(const Number& n, const Cudd* mgr) {
     mpq_clear(q);
     return dd;
   }
-  return Dd(Mtbdd::doubleTerminal(n.fraction));
+  return logCounting ? Dd(Mtbdd::doubleTerminal(n.getLog10())) : Dd(Mtbdd::doubleTerminal(n.fraction));
 }
 
 Dd Dd::getZeroDd(const Cudd* mgr) {
@@ -471,7 +471,7 @@ Dd Dd::getVarDd(Int ddVar, bool val, const Cudd* mgr) {
     }
     return val ? Dd(mgr->addVar(ddVar)) : Dd((mgr->addVar(ddVar)).Cmpl());
   }
-  if (val) {
+  if (val) {  //logCounting for vars in sylvan is handled inside getconstdd function
     return Dd(mtbdd_makenode(ddVar, getZeroDd(mgr).mtbdd.GetMTBDD(), getOneDd(mgr).mtbdd.GetMTBDD())); // (var, lo, hi)
   }
   return Dd(mtbdd_makenode(ddVar, getOneDd(mgr).mtbdd.GetMTBDD(), getZeroDd(mgr).mtbdd.GetMTBDD()));
@@ -524,7 +524,7 @@ Dd Dd::getProduct(const Dd& dd) const {
     LACE_ME;
     return Dd(Mtbdd(gmp_times(mtbdd.GetMTBDD(), dd.mtbdd.GetMTBDD())));
   }
-  return Dd(mtbdd * dd.mtbdd);
+  return logCounting ? Dd(mtbdd + dd.mtbdd) :Dd(mtbdd * dd.mtbdd);
 }
 
 Dd Dd::getSum(const Dd& dd) const {
@@ -535,7 +535,7 @@ Dd Dd::getSum(const Dd& dd) const {
     LACE_ME;
     return Dd(Mtbdd(gmp_plus(mtbdd.GetMTBDD(), dd.mtbdd.GetMTBDD())));
   }
-  return Dd(mtbdd + dd.mtbdd);
+  return logCounting? Dd(mtbdd.LogSumExp(dd.mtbdd)) : Dd(mtbdd + dd.mtbdd);
 }
 
 Dd Dd::getMax(const Dd& dd) const {
@@ -891,7 +891,6 @@ Int Executor::countSylvanNodes(const JoinNode* node){
   return totCount;
 }
 Number Executor::sampleCnf(const JoinNonterminal* joinRoot, const Map<Int, Int>& cnfVarToDdVarMap, const vector<Int>& ddVarToCnfVarMap, Int sliceVarOrderHeuristic){
-  // assert(ddPackage != SYLVAN); //not implemented yet
   assert(JoinNode::cnf.declaredVarCount == JoinNode::cnf.additiveVars.size()); //exist-var processing not implemented yet
   Float threadMem = maxMem;
   const Cudd* mgr = ddPackage == CUDD? Dd::newMgr(threadMem, 0) : nullptr; // thread index is 0 since only 1 thread
@@ -1154,9 +1153,9 @@ void OptionDict::runCommand() const {
       util::printRow("initRatio", initRatio);
       util::printRow("multiplePrecision", multiplePrecision);
     }
-    else {
+    // else {
       util::printRow("logCounting", logCounting);
-    }
+    // }
 
     util::printRow("joinPriority", JOIN_PRIORITIES.at(joinPriority));
     cout << "\n";
@@ -1283,7 +1282,8 @@ OptionDict::OptionDict(int argc, char** argv) {
     assert(!multiplePrecision || ddPackage == SYLVAN);
 
     logCounting = result[LOG_COUNTING_OPTION].as<Int>(); // global var
-    assert(!logCounting || ddPackage == CUDD);
+    //assert(!logCounting || ddPackage == CUDD);
+    assert(!logCounting != !multiplePrecision); //XOR https://stackoverflow.com/questions/1596668/logical-xor-operator-in-c
 
     joinPriority = result[JOIN_PRIORITY_OPTION].as<string>(); //global var
     assert(JOIN_PRIORITIES.contains(joinPriority));

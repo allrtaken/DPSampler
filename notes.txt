@@ -1,9 +1,94 @@
-add check for proj vars union not equal to apparent vars
+sylvan todo: full memory.. allocate full size for hash
+
+grep -inL 'time\ limit\|buckets\|c\ seconds\|alloc\|inf' * | less
+
+dmc_632ed69+
+	sylvan
+		bayes
+			unsat: 27
+			bad alloc: 5
+			buckets: 104
+			c seconds: 942
+			time limit: 0
+			timeout command: 2
+			total: 1080
+		pseudoweighted
+			unsat: 0
+			bad alloc: 1
+			buckets: 127
+			time limit: 281 (planner killed by slurm)
+			c seconds: 464
+			timeout command: 23
+			total: 896
+		enc1:
+			timeout command: 3
+			buckets: 2
+			bad alloc: 0
+			time limit: 90
+			c seconds: 175
+			total: 270
+	cudd
+		bayes
+			unsat: 27
+			alloc (incl cudd could not allocate): 79
+			timeout command: 31
+			c seconds: 943
+			total: 1080
+		pseudoweighted
+			unsat: 0
+			alloc: 21
+			time limit: 281
+			timeout command: 135
+			c seconds: 459
+			total: 896
+		enc1
+			unsat: 0
+			alloc: 0
+			timeout command: 15
+			time limit: 90
+			c seconds: 165
+			total: 270
+			
+			
+75-10-3-q.cnf reaches -inf leaf in log counting both cudd and sylvan
+	need to debug
+	lot of examples in bayes
+
+	dps_array_158.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_211.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_215.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_217.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_228.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_233.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_248.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_257.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_261.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_266.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_282.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_284.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_288.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_303.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_305.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_307.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_317.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_328.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_330.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_335.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_350.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_351.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_356.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_358.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_377.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_62.out:48:While checking sample for add reached leaf with value -inf
+	dps_array_94.out:48:While checking sample for add reached leaf with value -inf
+
+	all these files are unsat!!
+	
+	
+75-16-9-q.cnf runs on cudd with modest memory but on sylvan memory just blows up (and hangs pc) even after setting mm to a high value! Even in single threaded mode. Even tested on dpmc instead of dpsampler still same behavior. Make sure wc=1 as with wc=0 it is very easy to solve apparently. Might mean that weights are causing creation of too many leaf values and sylvan with mp=1 is unable to keep up. Sylvan without multiprecision runs fine.. so issue is most likely the large numbers in the leaves. Which raises the question how different is the answer without mp?
+	implemented sylvan log counting .. avoids this problem specifically
+
 rerun with correct timeout and time!
-reserve space for unorderedmap
-check best way to store pointers in hashmap
-use mm for cudd also
-dont use jp=a. s
 
 verify that tobdds and ddnnfs are incomparable ie exponentially succinct either way
 rewrite vskipped notation in algos 
@@ -17,6 +102,12 @@ one possibility was to store with each ADD an array of totWts of all samplevars 
 
 another possibility was to store borrowed cnfvarids in cnfvarid variable and to store original cnfvarid in auxvar for non-samplevarnodes during cofactor and to restore it uncofactor. This would have saved a check in cofactor function but would have added overhead in uncofactor. so avoiding for now.
 
+
+add check for proj vars union not equal to apparent vars -- it is an error if that happens since every var in apparentvar appears in some clause and therefore must get abstracted out at some poitn. Addded check for this error
+reserve space for unorderedmap -- done
+check best way to store pointers in hashmap .. couldnt find anything useful in short term
+use mm for cudd also -- used
+dont use jp=a. s -- using jp=a since its not very clear which one is better and for some benchmarks using jp a offered a big speedup (although for some the reverse seemed to happen but wasnt confirmed if jp was the cause)
 
 
 

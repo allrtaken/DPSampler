@@ -1,215 +1,98 @@
+from sqlite3.dbapi2 import Cursor
 import sys, os
-import pylab as pl
+from outputFileProcessors import processJTFile, processDPSFile, processWAPSFile, processTimeFile
+import sqlite3 as sq
+from contextlib import closing
+from benchmark_names import bayes_names,ps_names,enc1_names
 
-def main():
-	wDir = sys.argv[1]
-	dDir = sys.argv[2]
-	jtDir = "/home/adi/Downloads/dpsampler/experiments/data/planning/flow"
-	bayesN = 1080
-	psN = 896
+# from processOutput import initDB, getTableList, getTableSchema, closeAll
+# conn, cursor = initDB()
+# getTableList(cursor)
+# getTableSchema(cursor, "waps")
+# conn.commit()
+# closeAll(conn, cursor)
 
-	jtTimes = {}
-	jtAlltimes = []
-	bayesTWs = []
-	psTWs = []
-	for i in range(1976):
-		fp = open(jtDir+'/'+str(i).zfill(4)+'.out','r')
-		if i<1080:
-			expType = 'bayes'
-		else:
-			expType = 'pseudoweighted'
-		bType, bName, time, tw = processJTFile(fp,expectedType=expType)
-		jtTimes[(bType,bName)]= time, tw
-		jtAlltimes.append(time)
-	bayestimes = [[],[],[]]
-	pstimes = [[],[],[]]
-	for i in range(bayesN):
-		fp = open(wDir+'/output/bayes/waps_array_'+str(i)+'.out','r')
-		fName, time = processWAPSFile(fp)
-		if time != None:
-			bayestimes[0].append(time)
-		else:
-			bayestimes[0].append(1000)
-		fp.close()
-	for i in range(psN):
-		fp = open(wDir+'/output/pseudoweighted/waps_array_'+str(i)+'.out','r')
-		fName, time = processWAPSFile(fp)
-		if time != None:
-			pstimes[0].append(time)
-		else:
-			pstimes[0].append(1000)
-		fp.close()
-	for i in range(bayesN):
-		fp = open(dDir+'/output/bayes/dps_array_'+str(i)+'.out','r')
-		fName, preADDCompTime, ADDCompTime, SampCompTime, SampGenTime, totTime = processDPSFile(fp)
-		if totTime != None:
-			jtTime = jtTimes[('bayes',fName)][0]
-			assert jtTime != None
-			bayestimes[1].append(totTime+jtTime)
-			bayestimes[2].append(totTime)
-		else:
-			bayestimes[1].append(1000)
-			bayestimes[2].append(1000)
-		fp.close()
-		bayesTWs.append(jtTimes[('bayes',fName)][1])
-	for i in range(psN):
-		fp = open(dDir+'/output/pseudoweighted/dps_array_'+str(i)+'.out','r')
-		fName, preADDCompTime, ADDCompTime, SampCompTime, SampGenTime, totTime = processDPSFile(fp)
-		if totTime != None:
-			jtTime = jtTimes[('pseudoweighted',fName)][0]
-			assert jtTime != None
-			pstimes[1].append(jtTime+totTime)
-			pstimes[2].append(totTime)
-		else:
-			pstimes[1].append(1000)
-			pstimes[2].append(1000)
-		fp.close()
-		psTWs.append(jtTimes[('pseudoweighted',fName)][1])
-	colors=['green','blue','red','brown','orange']
-	mkrs= ['o','^','+','x','D']
-	
-	maxDiff = -1
-	maxi = -1
-	for i in range(len(bayestimes[1])):
-		if bayestimes[1][i] != None:
-			diff = bayestimes[1][i] - bayestimes[2][i]
-			if diff > maxDiff:
-				maxDiff = diff
-				maxi = i
-	print('Bayes max diff :',maxDiff,' maxi: ',maxi)
-	maxDiff = -1
-	maxi = -1
-	for i in range(len(pstimes[1])):
-		if pstimes[1][i] != None:
-			diff = pstimes[1][i] - pstimes[2][i]
-			if diff > maxDiff:
-				maxDiff = diff
-				maxi = i
-	print('Ps max diff :',maxDiff,' maxi: ',maxi)
-	
-	for config in [[['DPSampler',bayestimes[1]],['WAPS',bayestimes[0]]],'bayes'], [[['DPSampler',pstimes[1]],['WAPS',pstimes[0]]],'ps']:
-		colo = 0
-		for alg in config[0]: #['DPSampler w/o JT',bayestimes[2]]]:
-			totalNumCompleted = 0
-			timelist = {}
-			for time in alg[1]:
-				if time >= 1000:
-					timelist[1000] = 1
-				elif time in timelist:
-					timelist[time] += 1
-					totalNumCompleted += 1
+
+def initDB():
+	conn = sq.connect('dpsampling.db')
+	print("DB connection total changes: ",conn.total_changes)
+	cursor = conn.cursor()
+	return conn,cursor
+
+def closeAll(cn, cr):
+	cr.close()
+	cn.close()
+
+def getTableList(cursor):
+	cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")
+	tabs = (cursor.fetchall())
+	print(tabs)
+
+def getTableSchema(cursor, tab):
+	s = "PRAGMA table_info('"+tab+"')"
+	# print(s)
+	for row in cursor.execute(s).fetchall():
+		print(row)
+
+def fillBenchNames(cursor: Cursor):
+	flist = None
+	flists = [[bayes_names,'bayes'],[ps_names,'ps'],[enc1_names,'enc1']]
+	for flist,title in flists:
+		tab_name = 'filelist'
+		print("Inserting filenames and indices of "+title+" benchmarks into table "+tab_name+"..")
+		skipped = []
+		for i,name in enumerate(flist):
+			rows = cursor.execute("SELECT * FROM "+tab_name+" WHERE name=? AND type=?",(name,title)).fetchall()
+			assert len(rows) <= 1 #name,type is primary key
+			if len(rows) == 1:
+				if rows[0][1] != i:
+					print("ERROR: Table "+tab_name+" already contains a record with name=",rows[0][0]," and type=",rows[0][1]," and index=",rows[0][2])
+					print(".. when trying to insert new record with name=",name," and index=",i,"with type",title)
+					print("Stopping insertions..")
+					break
 				else:
-					timelist[time] = 1
-					totalNumCompleted += 1
-			alltimes = timelist.keys()
-			alltimes.sort()
-			numCompletedBenchsForEachTime = []
-			rt = 0
-			for time in alltimes:
-				rt = rt + timelist[time]
-				numCompletedBenchsForEachTime = numCompletedBenchsForEachTime + [rt]
-			print('Total Completed Benchmarks for ',alg[0],' is ',totalNumCompleted,numCompletedBenchsForEachTime[-2])
-			assert(totalNumCompleted == numCompletedBenchsForEachTime[-2])	
-			pl.plot(numCompletedBenchsForEachTime,alltimes,label=alg[0], linewidth=3.0, color=colors[colo])		
-			colo = colo + 1		
-		pl.rcParams['pdf.fonttype'] = 42
-		pl.rcParams['ps.fonttype'] = 42	
-		pl.legend(loc='lower right')
-		pl.tick_params(labelsize=16)
-		pl.ylim(0,1010)
-		pl.xlim(0,1090)
-		pl.xlabel('Number of benchmarks solved', fontsize=20)
-		pl.ylabel('Time (in seconds)', fontsize=20)
-		#pl.title('Comparison of Number of benchmarks solved', fontsize=24)
-		pl.axhline(y=7200, color='r', linestyle='--')
-		pl.savefig('graphs/cactus_completed_'+config[1]+'.eps',bbox_inches='tight')
-		pl.show()
+					skipped.append(i)
+					continue
+			cursor.execute("INSERT INTO "+tab_name+" VALUES (?,?,?)",(name,title,i))
+		print("Skipped following",len(skipped),"indices because records were already present:",skipped)
+		rows = cursor.execute("SELECT COUNT(1) FROM "+tab_name+"").fetchall()
+		print("Finished inserting file names in "+tab_name+". #records in "+tab_name+" is ", rows[0][0])
 
-	for config in [bayestimes[0],bayestimes[1],bayesTWs,'Bayes'],[pstimes[0],pstimes[1],psTWs,'Pseudoweighted']:
-		pl.scatter(config[2],config[0],label=alg[0], color='r', marker='o',facecolors='none')
-		pl.scatter(config[2],config[1],label=alg[0], color='b', marker='x')
-		pl.rcParams['pdf.fonttype'] = 42
-		pl.rcParams['ps.fonttype'] = 42			
-		pl.tick_params(labelsize=16)
-		pl.ylabel('Time (sec)', fontsize=20)
-		pl.xlabel('Tree-width', fontsize=20)
-		pl.title('Time vs Treewidth for '+config[3], fontsize=24)
-		pl.show()
-	for config in [bayestimes[0],bayestimes[1],'Bayes'],[pstimes[0],pstimes[1],'Pseudoweighted']:
-		pl.scatter(config[1],config[0],label=alg[0], color='b', marker='x')
-		pl.rcParams['pdf.fonttype'] = 42
-		pl.rcParams['ps.fonttype'] = 42			
-		pl.tick_params(labelsize=16)
-		pl.xlabel('DPSampler Time (sec)', fontsize=20)
-		pl.ylabel('WAPS Time (sec)', fontsize=20)
-		pl.title('DPSampler Time vs Treewidth for '+config[2], fontsize=24)
-		pl.show()
+def fillDMC(cursor: Cursor, dDir,lib):
+	params = [[1080,'bayes','bayes'],[896,'pseudoweighted','ps'],[270,'enc1','enc1']]
+	for param in params:
+		print("Doing "+param[1])
+		for i in range(param[0]):
+			fp = open(dDir+'/'+lib+'/output/'+param[1]+'/dps_array_'+str(i)+'.out','r')
+			fName, joinTreeWidth, plannerTime, preADDCompTime, ADDCompTime, SampCompTime, SampGenTime, totTime = processDPSFile(fp)
+			fp.close()
+			fp = open(dDir+'/'+lib+'/timing/'+param[1]+'/dps_array_'+str(i)+'.time','r')
+			userT, sysT, elapsedT, mem = processTimeFile(fp)
+			fp.close()
+			tup = (fName,param[2],joinTreeWidth, plannerTime, preADDCompTime, ADDCompTime, SampCompTime, SampGenTime, totTime, mem)
+			cursor.execute("INSERT INTO "+lib+"_632ed69plus VALUES (?,?,?,?,?,?,?,?,?,?)",tup)
+		rows = cursor.execute("SELECT COUNT(1) FROM "+lib+"_632ed69plus").fetchall()
+		print("Finished inserting file names in "+lib+"_632ed69plus. #records in "+lib+"_632ed69plus is ", rows[0][0])
 
-def processWAPSFile(fp, expectedFName=None):
-	fp.readline()
-	fp.readline()
-	fp.readline()
-	fnameLine = fp.readline()
-	assert(fnameLine.startswith("WAPS called on file: "))
-	fName = fnameLine.split()[-1]
-	if expectedFName!=None:
-		assert(fName == expectedFName)
-	time = None
-	prevLine = None
-	for line in fp:
-		if line.startswith("Total Time Taken by WAPS:"):
-			assert prevLine.startswith("Samples saved to /dev/null")
-			time = float(line.split()[-1])
-		prevLine = line
-	return fName, time
+def fillWAPS(cursor: Cursor, wDir):
+	params = [[1080,'bayes','bayes'],[896,'pseudoweighted','ps'],[270,'enc1','enc1']]
+	for param in params:
+		print("Doing "+param[1])
+		for i in range(param[0]):
+			fp = open(wDir+'/old_3_output/'+param[1]+'/waps_array_'+str(i)+'.out','r')
+			fName, compileTime, totTime = processWAPSFile(fp)
+			fp.close()
+			fp = open(wDir+'/old_3_timing/'+param[1]+'/waps_array_'+str(i)+'.time','r')
+			userT, sysT, elapsedT, mem = processTimeFile(fp)
+			fp.close()
+			tup = (fName,param[2], compileTime, totTime, mem)
+			cursor.execute("INSERT INTO waps VALUES (?,?,?,?,?)",tup)
+		rows = cursor.execute("SELECT COUNT(1) FROM waps").fetchall()
+		print("Finished inserting file names in waps. #records in waps is ", rows[0][0])
+	
+# def main():
+# 	initDB()
+# 	#populateDatabase()
 
-def processDPSFile(fp, expectedFName = None):
-	fp.readline()
-	fp.readline()
-	fp.readline()
-	fnameLine = fp.readline()
-	assert(fnameLine.startswith("DPSampler called on file: "))
-	fName = fnameLine.split()[-1]
-	if expectedFName!=None:
-		assert(fName == expectedFName)
-	preADDCompTime = None
-	ADDCompTime = None
-	SampCompTime = None
-	SampGenTime = None
-	totTime = None
-	for line in fp:
-		if line.startswith("c Total pre-(ADD-compilation) Time:"):
-			preADDCompTime = float(line.split()[-1])
-		if line.startswith("c ADD-Compilation Time:"):
-			assert preADDCompTime != None
-			ADDCompTime = float(line.split()[-1])
-		if line.startswith("c Sampler Compilation Time:"):
-			assert ADDCompTime != None
-			SampCompTime = float(line.split()[-1])
-		if line.startswith("c Sample Generation Time:"):
-			assert SampCompTime != None
-			SampGenTime = float(line.split()[-1])
-		if line.startswith("c seconds"):
-			assert SampGenTime != None
-			totTime = float(line.split()[-1])
-	return fName, preADDCompTime, ADDCompTime, SampCompTime, SampGenTime, totTime
-
-def processJTFile(fp, expectedType = None, expectedFName = None):
-	line1 = fp.readline().split()
-	bType = line1[1].split('/')[2]
-	bName = line1[1].split('/')[3].split("'")[0]
-	if expectedType != None:
-		assert expectedType == bType
-	if expectedFName != None:
-		assert expectedFName == bName
-	line2 = fp.readline().split(',')
-	timeList = line2[0].split('(')
-	if len(timeList) < 2:
-		time = None
-		tw = None
-	else:
-		time = float(timeList[1])
-		tw = int(line2[1])
-	return bType, bName, time, tw
-if __name__=="__main__":
-   main()
+# if __name__=="__main__":
+#    main()

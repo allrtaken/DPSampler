@@ -361,8 +361,8 @@ void ADDSampler::buildDataStructures(){
 		util::printComment("Reserving "+to_string(ddNodeCount)+" entries in hash for CUDD");
 		nodeMap_cudd.reserve(ddNodeCount);
 	} else{
-		util::printComment("Reserving at least 3/4th of "+to_string(ddNodeCount)+" entries for Sylvan (as it is an estimate)");
-		nodeMap_sylvan.reserve(std::min(1000LL,ddNodeCount*3/4));
+		util::printComment("Reserving "+to_string(ddNodeCount)+" entries for Sylvan (even though its an upper bound)");
+		nodeMap_sylvan.reserve(ddNodeCount);
 	}
 	util::printComment("Building sampling DAGs..  ",0,0);
 	createSamplingDAGs(jtRoot);
@@ -496,11 +496,19 @@ SamplerNode* ADDSampler::createSamplingDAG(MTBDD node, Dd* a){
 				}
 			#endif
 		} else {
-			#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
-				wt = mtbdd_getdouble(node);	
-			#else
-				wt = log10l(mtbdd_getdouble(node));
-			#endif
+			if (logCounting){
+				#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
+					wt = (double) exp10l(mtbdd_getdouble(node));
+				#else
+					wt = mtbdd_getdouble(node); 
+				#endif
+			} else{
+				#if SAMPLE_NUM_TYPE == 0 || SAMPLE_NUM_TYPE == 2
+					wt = mtbdd_getdouble(node);	
+				#else
+					wt = log10l(mtbdd_getdouble(node));
+				#endif
+			}
 		}
 		
 		cnfVarID = MAX_INT; // leaf level should be equal to size of projectable vars, since cmprsdlvls are 0 indexed
