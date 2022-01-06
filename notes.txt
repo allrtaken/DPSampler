@@ -1,3 +1,5 @@
+dummy change to check git personal access token
+
 31 benchmarks in bayes were unsat. deleted them from database using delete from command with following nested query to select corresponding file names.
 	SELECT cudd.name FROM sylvan_632ed69plus cudd, filelist WHERE cudd.type='bayes' AND cudd.name=filelist.name AND filelist.number IN (62, 94, 158, 181, 211, 215, 217, 228, 233, 248, 257, 261, 266, 282, 284, 288, 303, 305, 307, 317, 328, 330, 335, 350, 351, 356, 358, 377, 409, 411, 416))
 	the numbers were found using    grep -inl "unsat" * | less    in waps bayes result directory
