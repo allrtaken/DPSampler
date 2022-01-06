@@ -1,0 +1,4 @@
+gave write permission to vardi group on subdirectories in /projects/vardi/dpsampling/ using
+	find dpsampling/ -type d -exec chmod g+w {} \;
+	
+

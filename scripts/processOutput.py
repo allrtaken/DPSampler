@@ -5,6 +5,9 @@ import sqlite3 as sq
 from contextlib import closing
 from benchmark_names import bayes_names,ps_names,enc1_names
 
+# I manually worked with following functions in the python interpreter to see that everything was working as expected
+# therefore no 'main' function here.
+# some commands:
 # from processOutput import initDB, getTableList, getTableSchema, closeAll
 # conn, cursor = initDB()
 # getTableList(cursor)

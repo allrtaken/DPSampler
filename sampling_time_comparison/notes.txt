@@ -1,0 +1,33 @@
+This experiment was to compare 'only sample generation time' between the new top-down inplace sampling procedure vs. the bottom-up procedure from trace-sampling.
+
+Used the following codebase which was dpsampler with bottomup sampling : https://github.com/allrtaken/DPMC/commit/4dc540e5e36f024bddbf12a4f124cfb866810349
+	added lines to counter.cpp to output sample generation time and per sample time explicitly
+		copy is in this folder
+	there are minor bugs in this version, and no support for logcounting. but for purposes of this experiment it is fine, as it gives a rough idea of time taken
+		and more importantly the bugs will only help bottom-up sampling (eg no logcounting can cause underflow making some adds smaller), so the speedup we report is conservative
+copy of the binary used is also in this folder
+	example command to run:
+	$DPSAMPLER/lg/build/lg "$DPSAMPLER/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < /home/adi/Downloads/dpsampler//converted_benchmarks/bayes/50-14-3-q.cnf | ./bottomup_dmc --jf - --cf /home/adi/Downloads/dpsampler//experiments/benchmarks/raw/bayes/50-14-3-q.cnf --cs s --ns 5000 --wf 2 --sf /dev/null
+
+
+or for nots:
+$DPSAMPLERDIR/lg/build/lg "$DPSAMPLERDIR/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < /projects/vardi/dpsampling/converted_benchmarks/raw/bayes/50-14-3-q.cnf | ./bottomup_dmc --cf /projects/vardi/DPMC/benchmarks/old/bayes/50-14-3-q.cnf --jf - --cs s --wf 2 --ns 1000 --sf /dev/null
+
+hypothesis was that the number of nodes in the project join tree affects the sampling time for bottomup a lot
+	the size of the project join tree is in (roughly) /projects/vardi/DPMC/store/0/flow/raw/bayes/something.cnf/1.jt
+		the first line stands for p jt $vars $clauses $nodes, where nodes is the number of nodes in the jtree
+		
+we chose 5 benchmarks with number of join tree nodes ~ 300, 600, 1000, 1600, 2000 . Details are below. 
+
+tuple in dpsampling.db : file indext (eg. dps_array_372.out) : #nodes in jtree : time taken to sample 5000 instances to /dev/null by bottomup.
+
+Top down sampling times are the 3rd last elements in the tuple ( ... sampgen_t, total_t, mem)
+
+('90-34-3-q.cnf', 'bayes', 73, 0.168867, 0.218, 36.474, 5.815, 17.434, 60.806, 5381012)     : 372 : 6028 
+('90-25-2-q.cnf', 'bayes', 49, 0.0892922, 0.127, 1.265, 0.223, 7.417, 9.093, 435360)        : 341 : 3231
+('75-20-7-q.cnf', 'bayes', 35, 0.0479095, 0.067, 27.389, 4.48, 11.883, 45.821, 5200436)     : 146 : 2666  .. bottom-up is alread struggling here
+('50-16-6-q.cnf', 'bayes', 30, 0.0398346, 0.06, 10.832, 1.765, 5.452, 18.259, 2281316)      : 35  : 2075 : 771.02
+('or-100-20-4-UC-30.cnf', 'bayes', 43, 0.0264923, 0.062, 0.016, 0.006, 1.2, 1.285, 155000)  : 1034 : 679 : 30.97
+('or-50-5-9.cnf', 'bayes', 24, 0.00358245, 0.092, 0.001, 0.004, 0.211, 0.31, 151724)        :      : 319 : 3.779 secs
+('90-14-2-q.cnf', 'bayes', 24, 0.0189329, 0.062, 0.014, 0.008, 2.046, 2.133, 157896)        :      : 1004 : 31.57
+('50-14-3-q.cnf', 'bayes', 25, 0.0348362, 0.073, 1.622, 0.422, 3.827, 5.997, 590800)        :      : 1612 : 265.36

@@ -1,0 +1,40 @@
+dmc_632ed69+
+===========
+
+	CUDD:
+	=====
+	
+$DPSAMPLERDIR/lg/build/lg "$DPSAMPLERDIR/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < /projects/vardi/dpsampling/converted_benchmarks/raw/bayes/${bayes_names[${SLURM_ARRAY_TASK_ID}]} | /usr/bin/time -o /projects/vardi/dpsampling/results/dmc_632ed69+/cudd/timing/bayes/dps_array_${SLURM_ARRAY_TASK_ID}.time timeout -k 1s 1000s ${DPSAMPLER} --cf /projects/vardi/dpsampling/converted_benchmarks/raw/bayes/${bayes_names[${SLURM_ARRAY_TASK_ID}]} --jp a --dp c --wc 1 --lc 1 --mm 14000 --tc 1 --mp 0 --pw 0 --ns 5000 --sf /dev/null
+
+
+$DPSAMPLERDIR/lg/build/lg "$DPSAMPLERDIR/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < /projects/vardi/dpsampling/converted_benchmarks/raw/pseudoweighted/${ps_names[${SLURM_ARRAY_TASK_ID}]} | /usr/bin/time -o /projects/vardi/dpsampling/results/dmc_632ed69+/cudd/timing/pseudoweighted/dps_array_${SLURM_ARRAY_TASK_ID}.time timeout -k 1s 1000s ${DPSAMPLER} --cf /projects/vardi/dpsampling/converted_benchmarks/raw/pseudoweighted/${ps_names[${SLURM_ARRAY_TASK_ID}]} --jp a --dp c --wc 1 --lc 1 --mm 14000 --tc 1 --mp 0 --pw 0 --ns 5000 --sf /dev/null
+
+$DPSAMPLERDIR/lg/build/lg "$DPSAMPLERDIR/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < /projects/vardi/dpsampling/converted_benchmarks/raw/enc1/${enc1_names[${SLURM_ARRAY_TASK_ID}]} | /usr/bin/time -o /projects/vardi/dpsampling/results/dmc_632ed69+/cudd/timing/enc1/dps_array_${SLURM_ARRAY_TASK_ID}.time timeout -k 1s 1000s $DPSAMPLER --cf /projects/vardi/dpsampling/converted_benchmarks/raw/enc1/${enc1_names[${SLURM_ARRAY_TASK_ID}]} --jp a --dp c --wc 1 --lc 1 --mm 14000 --tc 1 --mp 0 --pw 0 --ns 5000 --sf /dev/null
+
+dmc_68cad57
+===========
+
+	CUDD:
+	=====
+	
+/usr/bin/time -o /projects/vardi/dpsampling/results/dmc_68cad57/cudd/timing/bayes/dps_array_${SLURM_ARRAY_TASK_ID}.time timeout -k 1s 1000s $DPSAMPLERDIR/lg/build/lg "$DPSAMPLERDIR/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < /projects/vardi/dpsampling/converted_benchmarks/raw/bayes/${bayes_names[${SLURM_ARRAY_TASK_ID}]} | ${DPSAMPLER} --cf /projects/vardi/dpsampling/converted_benchmarks/raw/bayes/${bayes_names[${SLURM_ARRAY_TASK_ID}]} --jp a --dp c --wc 1 --lc 1  --ns 5000 --sf /dev/null
+
+/usr/bin/time -o /projects/vardi/dpsampling/results/dmc_68cad57/cudd/timing/pseudoweighted/dps_array_${SLURM_ARRAY_TASK_ID}.time timeout -k 1s 1000s $DPSAMPLERDIR/lg/build/lg "$DPSAMPLERDIR/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < /projects/vardi/dpsampling/converted_benchmarks/raw/pseudoweighted/${ps_names[${SLURM_ARRAY_TASK_ID}]} | ${DPSAMPLER} --cf /projects/vardi/dpsampling/converted_benchmarks/raw/pseudoweighted/${ps_names[${SLURM_ARRAY_TASK_ID}]} --jp a --dp c --wc 1 --lc 1  --ns 5000 --sf /dev/null
+
+/usr/bin/time -o /projects/vardi/dpsampling/results/dmc_68cad57/cudd/timing/enc1/dps_array_${SLURM_ARRAY_TASK_ID}.time timeout -k 1s 1000s $DPSAMPLERDIR/lg/build/lg "$DPSAMPLERDIR/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < /projects/vardi/dpsampling/converted_benchmarks/raw/enc1/${enc1_names[${SLURM_ARRAY_TASK_ID}]} | $DPSAMPLER --pw=0 --cf /projects/vardi/dpsampling/converted_benchmarks/raw/enc1/${enc1_names[${SLURM_ARRAY_TASK_ID}]} --jp a --dp c --wc 1 --lc 1  --ns 5000 --sf /dev/null
+
+
+
+	
+	SYLVAN:
+	=======
+	
+/usr/bin/time -o /projects/vardi/dpsampling/results/dmc_68cad57/sylvan/timing/bayes/dps_array_${SLURM_ARRAY_TASK_ID}.time timeout -k 1s 1000s $DPSAMPLERDIR/lg/build/lg "$DPSAMPLERDIR/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < /projects/vardi/dpsampling/converted_benchmarks/raw/bayes/${bayes_names[${SLURM_ARRAY_TASK_ID}]} | ${DPSAMPLER} --cf /projects/vardi/dpsampling/converted_benchmarks/raw/bayes/${bayes_names[${SLURM_ARRAY_TASK_ID}]} --jp a --dp s --wc 1 --lc 0 --mp 1 --pw 0 --tc 1  --ns 5000 --sf /dev/null
+
+/usr/bin/time -o /projects/vardi/dpsampling/results/dmc_68cad57/sylvan/timing/pseudoweighted/dps_array_${SLURM_ARRAY_TASK_ID}.time timeout -k 1s 1000s $DPSAMPLERDIR/lg/build/lg "$DPSAMPLERDIR/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < /projects/vardi/dpsampling/converted_benchmarks/raw/pseudoweighted/${ps_names[${SLURM_ARRAY_TASK_ID}]} | ${DPSAMPLER} --cf /projects/vardi/dpsampling/converted_benchmarks/raw/pseudoweighted/${ps_names[${SLURM_ARRAY_TASK_ID}]} --jp a --dp s --wc 1 --lc 0 --mp 1 --pw 0 --tc 1  --ns 5000 --sf /dev/null
+
+/usr/bin/time -o /projects/vardi/dpsampling/results/dmc_68cad57/sylvan/timing/enc1/dps_array_${SLURM_ARRAY_TASK_ID}.time timeout -k 1s 1000s $DPSAMPLERDIR/lg/build/lg "$DPSAMPLERDIR/lg/solvers/flow-cutter-pace17/flow_cutter_pace17 -s 1234567 -p 100" < /projects/vardi/dpsampling/converted_benchmarks/raw/enc1/${enc1_names[${SLURM_ARRAY_TASK_ID}]} | $DPSAMPLER --pw=0 --cf /projects/vardi/dpsampling/converted_benchmarks/raw/enc1/${enc1_names[${SLURM_ARRAY_TASK_ID}]} --jp a --dp c --wc 1 --lc 1  --ns 5000 --sf /dev/null
+
+
+change tc to 16 and mm to 24000 after test runs
+

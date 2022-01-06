@@ -1,5 +1,13 @@
-sylvan todo: full memory.. allocate full size for hash
+31 benchmarks in bayes were unsat. deleted them from database using delete from command with following nested query to select corresponding file names.
+	SELECT cudd.name FROM sylvan_632ed69plus cudd, filelist WHERE cudd.type='bayes' AND cudd.name=filelist.name AND filelist.number IN (62, 94, 158, 181, 211, 215, 217, 228, 233, 248, 257, 261, 266, 282, 284, 288, 303, 305, 307, 317, 328, 330, 335, 350, 351, 356, 358, 377, 409, 411, 416))
+	the numbers were found using    grep -inl "unsat" * | less    in waps bayes result directory
+	the deleted rows are in deleted_waps , deleted_cudd etc tables
+	
+	 
+idea: is it possible to compile unweighted (because it is very fast at least in some cases) and then retroactively compute leaf values scaled by weight function? ddnnfs dont have to include weights when decomposing, then why should adds? if possible should be useful as definitely for some cases the dd size blows up because of presence of weights
 
+sylvan todo: full memory.. allocate full size for hash
+	implemented, but not experimented with..
 grep -inL 'time\ limit\|buckets\|c\ seconds\|alloc\|inf' * | less
 
 dmc_632ed69+
