@@ -1,9 +1,9 @@
 from sqlite3.dbapi2 import Cursor
 import sys, os
-from outputFileProcessors import processJTFile, processDPSFile, processWAPSFile, processTimeFile
+from outputFileProcessors import processJTFile, processDPSFile, processWAPSFile, processTimeFile, processBUDPSFile
 import sqlite3 as sq
 from contextlib import closing
-from benchmark_names import bayes_names,ps_names,enc1_names
+from benchmark_names import bayes_names,ps_names,enc1_names, wb_names
 
 # I manually worked with following functions in the python interpreter to see that everything was working as expected
 # therefore no 'main' function here.
@@ -14,7 +14,9 @@ from benchmark_names import bayes_names,ps_names,enc1_names
 # getTableSchema(cursor, "waps")
 # conn.commit()
 # closeAll(conn, cursor)
-
+# cursor.execute("ALTER TABLE sylvan_632ed69plus ADD mem INTEGER")
+# cursor.execute("CREATE TABLE cudd_632ed69plus (name TEXT, type TEXT, jt_width INTEGER, planner_t REAL, totpreaddcomp_t REAL, addcomp_t REAL, sampcomp_t REAL, sampgen_t REAL, total_t REAL, PRIMARY KEY(name, type))")
+# cursor.execute("CREATE TABLE budmc (name TEXT, type TEXT, jt_width INTEGER, declaredNodeCount INTEGER, sampgen_t REAL, total_t REAL, mem INTEGER, PRIMARY KEY (name, type))")
 
 def initDB():
 	conn = sq.connect('dpsampling.db')
@@ -39,7 +41,8 @@ def getTableSchema(cursor, tab):
 
 def fillBenchNames(cursor: Cursor):
 	flist = None
-	flists = [[bayes_names,'bayes'],[ps_names,'ps'],[enc1_names,'enc1']]
+	# flists = [[bayes_names,'bayes'],[ps_names,'ps'],[enc1_names,'enc1']]
+	flists = [[wb_names,'wb']]
 	for flist,title in flists:
 		tab_name = 'filelist'
 		print("Inserting filenames and indices of "+title+" benchmarks into table "+tab_name+"..")
@@ -63,6 +66,7 @@ def fillBenchNames(cursor: Cursor):
 
 def fillDMC(cursor: Cursor, dDir,lib):
 	params = [[1080,'bayes','bayes'],[896,'pseudoweighted','ps'],[270,'enc1','enc1']]
+	params = [[773,'waps_bench','wb']]
 	for param in params:
 		print("Doing "+param[1])
 		for i in range(param[0]):
@@ -77,8 +81,25 @@ def fillDMC(cursor: Cursor, dDir,lib):
 		rows = cursor.execute("SELECT COUNT(1) FROM "+lib+"_632ed69plus").fetchall()
 		print("Finished inserting file names in "+lib+"_632ed69plus. #records in "+lib+"_632ed69plus is ", rows[0][0])
 
+def fillBUDMC(cursor: Cursor, dDir):
+	params = [[1080,'bayes','bayes'],[896,'pseudoweighted','ps']]
+	for param in params:
+		print("Doing "+param[1])
+		for i in range(param[0]):
+			fp = open(dDir+'/output/'+param[1]+'/dps_array_'+str(i)+'.out','r')
+			fName, joinTreeWidth, declaredNodeCount, SampGenTime, totTime = processBUDPSFile(fp)
+			fp.close()
+			fp = open(dDir+'/timing/'+param[1]+'/dps_array_'+str(i)+'.time','r')
+			userT, sysT, elapsedT, mem = processTimeFile(fp)
+			fp.close()
+			tup = (fName,param[2],joinTreeWidth, declaredNodeCount, SampGenTime, totTime, mem)
+			cursor.execute("INSERT INTO budmc VALUES (?,?,?,?,?,?,?)",tup)
+		rows = cursor.execute("SELECT COUNT(1) FROM budmc").fetchall()
+		print("Finished inserting file names in budmc. #records in budmc is ", rows[0][0])
+
 def fillWAPS(cursor: Cursor, wDir):
 	params = [[1080,'bayes','bayes'],[896,'pseudoweighted','ps'],[270,'enc1','enc1']]
+	params = [[773,'waps_bench','wb']]
 	for param in params:
 		print("Doing "+param[1])
 		for i in range(param[0]):

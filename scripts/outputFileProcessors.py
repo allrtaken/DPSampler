@@ -74,6 +74,43 @@ def processDPSFile(fp, expectedFName = None):
 			totTime = float(line.split()[-1])
 	return fName, joinTreeWidth, plannerTime, preADDCompTime, ADDCompTime, SampCompTime, SampGenTime, totTime
 
+def processBUDPSFile(fp, expectedFName = None):
+	fp.readline()
+	fp.readline()
+	fp.readline()
+	fnameLine = fp.readline()
+	assert(fnameLine.startswith("DPSampler called on file: "))
+	fName = fnameLine.split()[-1]
+	if expectedFName!=None:
+		assert(fName == expectedFName)
+
+	joinTreeWidth = None
+	declaredNodeCount = None
+	SampGenTime = None
+	totTime = None
+	nonZeroCount = False
+	
+	for line in fp:
+		if line.startswith("c After"):
+			joinTreeWidth = int(line.split()[-1])
+		
+		if line.startswith("c declaredNodeCount"):
+			assert joinTreeWidth != None
+			declaredNodeCount = int(line.split()[-1])
+		if line.startswith("c Sample Generation Time:"):
+			assert declaredNodeCount != None
+			SampGenTime = float(line.split()[-1])
+		if line.startswith("s wmc"):
+			assert SampGenTime != 0
+			count = float(line.split()[-1])
+			if count != 0:
+				nonZeroCount = True
+		if line.startswith("c seconds"):
+			if nonZeroCount == True:
+				totTime = float(line.split()[-1])
+	return fName, joinTreeWidth, declaredNodeCount, SampGenTime, totTime
+
+
 def processJTFile(fp, expectedType = None, expectedFName = None):
 	line1 = fp.readline().split()
 	bType = line1[1].split('/')[2]

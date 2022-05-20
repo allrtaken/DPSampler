@@ -9,6 +9,9 @@ import sys
 def geomean(xs):
 	return math.exp(math.fsum(math.log(x) if x > 0 else math.log(x+0.3) for x in xs) / len(xs))
 
+def geosd(xs, mu): #geometric standard deviation
+	return math.exp(math.sqrt(math.fsum((math.log(x/mu))**2 if x>0 else (math.log((x+0.3)/mu))**2 for x in xs)/len(xs)))
+
 def getStrings(tottime, title):
 	wapsTimeStr = None
 	dmcTimeStr = None
@@ -20,11 +23,17 @@ def getStrings(tottime, title):
 		wapsTimeStr = 'waps.compile_t'
 		dmcTimeStr = '(dmc.totpreaddcomp_t + dmc.addcomp_t)'
 	if title == 'all': #not including enc1.. do it separately if needed
-		titleStr = '((waps.type=\'bayes\' and dmc.type=\'bayes\') OR (waps.type=\'ps\' and dmc.type=\'ps\'))'
+		titleStr = '((waps.type=\'bayes\' and dmc.type=\'bayes\') OR (waps.type=\'ps\' and dmc.type=\'ps\') OR (waps.type=\'wb\' and dmc.type=\'wb\'))'
+	elif title == 'allunique':
+		titleStr = '((waps.type=\'bayes\' and dmc.type=\'bayes\') OR (waps.type=\'ps\' and dmc.type=\'ps\') OR (waps.type=\'wb\' and dmc.type=\'wb\'AND (waps.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\')) ))'
 	elif title=='bayes':
 		titleStr = '(waps.type=\'bayes\' and dmc.type=\'bayes\')'
 	elif title == 'ps':
 		titleStr = '(waps.type=\'ps\' and dmc.type=\'ps\')'
+	elif title == 'db': #dpmc benchmarks
+		titleStr = '((waps.type=\'bayes\' and dmc.type=\'bayes\') OR (waps.type=\'ps\' and dmc.type=\'ps\'))'
+	elif title == 'wb':
+		titleStr = '(waps.type=\'wb\' and dmc.type=\'wb\')'
 	else:
 		print("Title not recognized. Exiting..")
 		sys.exit(1)
@@ -34,7 +43,9 @@ def getStrings(tottime, title):
 def calcSpeedups(cur:Cursor, tottime:bool, dmc_lib:str, title:str):
 	wapsTimeStr,dmcTimeStr,titleStr = getStrings(tottime, title)
 	rows = cur.execute("SELECT "+wapsTimeStr+"/"+dmcTimeStr+" from waps, "+dmc_lib+"_632ed69plus as dmc  WHERE "+titleStr+" AND (waps.name = dmc.name) AND (waps.type = dmc.type) AND ("+dmcTimeStr+" < 1000) AND ("+wapsTimeStr+" < 1000)").fetchall()
-	print (geomean(next(zip(*rows))))
+	mu = geomean(next(zip(*rows)))
+	gsd = geosd(next(zip(*rows)), mu)
+	print('geo-mean: ',mu,'  geo-sd:',gsd)
 
 def calcFinished(cur:Cursor, tottime:bool, dmc_lib:str, title:str):
 	wapsTimeStr,dmcTimeStr,titleStr = getStrings(tottime, title)
@@ -42,7 +53,7 @@ def calcFinished(cur:Cursor, tottime:bool, dmc_lib:str, title:str):
 	only_waps = cur.execute("SELECT COUNT(1) from waps, "+dmc_lib+"_632ed69plus as dmc  WHERE "+titleStr+" AND (waps.name = dmc.name) AND (waps.type = dmc.type) AND ("+dmcTimeStr+" IS NULL) AND ("+wapsTimeStr+" < 1000)").fetchall()
 	only_dmc = cur.execute("SELECT COUNT(1) from waps, "+dmc_lib+"_632ed69plus as dmc  WHERE "+titleStr+" AND (waps.name = dmc.name) AND (waps.type = dmc.type) AND ("+dmcTimeStr+" < 1000) AND ("+wapsTimeStr+" IS NULL)").fetchall()
 	print ("Both:",both[0][0]," only_waps:",only_waps[0][0]," only_dmc:",only_dmc[0][0])
-
+	
 def calcFastest(cur:Cursor, dmc_lib:str, title:str):
 	# not computing for compile time because 'fastest' becomes blury. 
 	# for eg we only consider ddnnf compilation time as compilation for waps, and not include time for annotation
@@ -112,11 +123,17 @@ def processPar2Rows(rows):
 
 def plotPar2TWs(cur:Cursor, title:str, windowSize, avg): #, tottime:bool, dmc_lib:str, title:str):
 	if title == 'all': #not including enc1.. do it separately if needed
-		titleStr = '((waps.type=\'bayes\' and cudd.type=\'bayes\') OR (waps.type=\'ps\' and cudd.type=\'ps\'))'
+		titleStr = '((waps.type=\'bayes\' and cudd.type=\'bayes\') OR (waps.type=\'ps\' and cudd.type=\'ps\') OR (waps.type=\'wb\' and cudd.type=\'wb\'))'
+	elif title == 'allunique':
+		titleStr = '((waps.type=\'bayes\' and cudd.type=\'bayes\') OR (waps.type=\'ps\' and cudd.type=\'ps\') OR (waps.type=\'wb\' and cudd.type=\'wb\'AND (waps.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\')) ))'
 	elif title=='bayes':
 		titleStr = '(waps.type=\'bayes\' and cudd.type=\'bayes\')'
 	elif title == 'ps':
 		titleStr = '(waps.type=\'ps\' and cudd.type=\'ps\')'
+	elif title == 'db':
+		titleStr = '((waps.type=\'bayes\' and cudd.type=\'bayes\') OR (waps.type=\'ps\' and cudd.type=\'ps\'))'
+	elif title == 'wb':
+		titleStr = '(waps.type=\'wb\' and cudd.type=\'wb\')'
 	else:
 		print("Title not recognized. Exiting..")
 		sys.exit(1)
@@ -124,7 +141,7 @@ def plotPar2TWs(cur:Cursor, title:str, windowSize, avg): #, tottime:bool, dmc_li
 	timemap = processPar2Rows(rows)
 	
 	jtws = sorted(timemap.keys())
-	print(jtws,timemap[jtws[10]])
+	# print(jtws,timemap[jtws[10]])
 	l = len(jtws)
 	assert l > windowSize and windowSize>0
 	res = []
@@ -156,8 +173,8 @@ def plotPar2TWs(cur:Cursor, title:str, windowSize, avg): #, tottime:bool, dmc_li
 	pl.tick_params(labelsize=14)
 	#pl.ylim(0,1010)
 	#pl.xlim(0,1090)
-	pl.xlabel('Mean of 10 project-join treewidths',fontsize=16)#, fontsize=20)
-	pl.ylabel('Mean PAR2 score of 10 widths',fontsize=16)#, fontsize=20)
+	pl.xlabel('Mean of '+str(windowSize)+' project-join treewidths',fontsize=16)#, fontsize=20)
+	pl.ylabel('Mean PAR2 score of '+str(windowSize)+' widths',fontsize=16)#, fontsize=20)
 	#pl.title(title+' '+dmc_lib+' '+wapsTimeStr.split('.')[1], fontsize=24)
 	#pl.axhline(y=1, color='r', linestyle='--')
 	pl.savefig('result_analysis/graphs/dmc_632ed69+/par2_'+title+'.eps',bbox_inches='tight')
@@ -165,14 +182,21 @@ def plotPar2TWs(cur:Cursor, title:str, windowSize, avg): #, tottime:bool, dmc_li
 
 def plotCactus(cur:Cursor, title: str, caption:str, numBench): #, tottime:bool, dmc_lib:str, title:str):
 	# assert title in ['bayes', 'ps']
+	# not doing allunique because the graphs are plotted separately anyway
 	if title=='all':
 		title1 = 'bayes'
 		title2 = 'ps'
+		title3 = 'wb'
+	elif title=='db':
+		title1 = 'bayes'
+		title2 = 'ps'
+		title3 = 'ps'
 	else:
 		title1 = title
 		title2 = title
-	rows_waps=cur.execute('SELECT t1.total_t, (SELECT COUNT(1) FROM waps t2 WHERE ((t2.type=\''+title1+'\') OR (t2.type=\''+title2+'\'))  AND (t2.total_t <= t1.total_t)) AS num_complete FROM waps t1 WHERE ((t1.type=\''+title1+'\') OR (t1.type=\''+title2+'\')) GROUP BY t1.total_t ORDER BY t1.total_t').fetchall()
-	rows_cudd=cur.execute('SELECT t1.total_t, (SELECT COUNT(1) FROM cudd_632ed69plus t2 WHERE ((t2.type=\''+title1+'\') OR (t2.type=\''+title2+'\')) AND (t2.total_t <= t1.total_t)) AS num_complete FROM cudd_632ed69plus t1 WHERE ((t1.type=\''+title1+'\') OR (t1.type=\''+title2+'\')) GROUP BY t1.total_t ORDER BY t1.total_t').fetchall()
+		title3 = title
+	rows_waps=cur.execute('SELECT t1.total_t, (SELECT COUNT(1) FROM waps t2 WHERE ((t2.type=\''+title1+'\') OR (t2.type=\''+title2+'\') OR (t2.type=\''+title3+'\'))  AND (t2.total_t <= t1.total_t)) AS num_complete FROM waps t1 WHERE ((t1.type=\''+title1+'\') OR (t1.type=\''+title2+'\') OR (t1.type=\''+title3+'\')) GROUP BY t1.total_t ORDER BY t1.total_t').fetchall()
+	rows_cudd=cur.execute('SELECT t1.total_t, (SELECT COUNT(1) FROM cudd_632ed69plus t2 WHERE ((t2.type=\''+title1+'\') OR (t2.type=\''+title2+'\') OR (t2.type=\''+title3+'\')) AND (t2.total_t <= t1.total_t)) AS num_complete FROM cudd_632ed69plus t1 WHERE ((t1.type=\''+title1+'\') OR (t1.type=\''+title2+'\') OR (t1.type=\''+title3+'\')) GROUP BY t1.total_t ORDER BY t1.total_t').fetchall()
 	# rows_sylvan=cur.execute('SELECT t1.total_t, (SELECT COUNT(1) FROM sylvan_632ed69plus t2 WHERE (t2.type=\''+title+'\') AND (t2.total_t <= t1.total_t)) AS num_complete FROM sylvan_632ed69plus t1 WHERE (t1.type=\''+title+'\') GROUP BY t1.total_t ORDER BY t1.total_t').fetchall()
 	colors=['green','blue','red','brown','orange']
 	mkrs= ['o','^','+','x','D']
@@ -220,53 +244,142 @@ def plotSamplingComparison():
 	pl.savefig('result_analysis/graphs/dmc_632ed69+/sampling_comparison.eps',bbox_inches='tight')
 	pl.show()
 
-def calcSylvanCuddSpeedup(cur: Cursor, title:str):
-	dmc1TimeStr = '(dmc1.totpreaddcomp_t + dmc1.addcomp_t)'
-	dmc2TimeStr = '(dmc2.totpreaddcomp_t + dmc2.addcomp_t)'
+def plotSamplingComparison2(cur:Cursor, title: str):
+	# bayes and ps comparison for iJCAI 22 (so no need for all unique)
+	dmc1TimeStr = '(dmc1.sampgen_t)'
+	dmc2TimeStr = '(dmc2.sampgen_t)'
 	if title == 'all': #not including enc1.. do it separately if needed
 		titleStr = '((dmc1.type=\'bayes\' and dmc2.type=\'bayes\') OR (dmc1.type=\'ps\' and dmc2.type=\'ps\'))'
 	elif title=='bayes':
 		titleStr = '(dmc1.type=\'bayes\' and dmc2.type=\'bayes\')'
 	elif title == 'ps':
 		titleStr = '(dmc1.type=\'ps\' and dmc2.type=\'ps\')'
+	speedup_rows = cur.execute("SELECT "+dmc2TimeStr+"/"+dmc1TimeStr+" from cudd_632ed69plus dmc1, budmc dmc2  WHERE "+titleStr+" AND (dmc1.name = dmc2.name) AND (dmc1.type = dmc2.type) AND ("+dmc1TimeStr+" < 1000) AND ("+dmc2TimeStr+" < 1000)").fetchall()
+	mu = geomean(next(zip(*speedup_rows)))
+	gsd = geosd(next(zip(*speedup_rows)),mu)
+	print ('geomean:',mu,' geosd:',gsd)
+	rows = cur.execute("SELECT COUNT(*) from cudd_632ed69plus dmc WHERE (dmc.type='ps' OR dmc.type='bayes') AND (dmc.total_t < 1000)").fetchall()
+	print('Total instances solved by top down',rows)
+	rows = cur.execute("SELECT COUNT(*) from budmc dmc WHERE (dmc.type='ps' OR dmc.type='bayes') AND (dmc.total_t < 1000)").fetchall()
+	print('Total instances solved by bottomup',rows)
+	rows = cur.execute("SELECT "+dmc2TimeStr+"/"+dmc1TimeStr+",dmc2.declaredNodeCount from cudd_632ed69plus dmc1, budmc dmc2  WHERE "+titleStr+" AND (dmc1.name = dmc2.name) AND (dmc1.type = dmc2.type) AND ("+dmc1TimeStr+" < 1000) AND ("+dmc2TimeStr+" < 1000)").fetchall()
+	from matplotlib import rc
+	rc('text', usetex=True)
+	colors=['green','blue','red','brown','orange']
+	mkrs= ['o','^','+','x','D']
+	speedups, nodecounts = zip(*rows)
+	pl.scatter(nodecounts,speedups, color=colors[0], marker='x')
+	pl.plot(np.unique(nodecounts), np.poly1d(np.polyfit(nodecounts,speedups, 1))(np.unique(nodecounts)), label='Best-Fit Line')
+	#pl.errorbar([g[0] for g in gms],[g[1] for g in gms],[[g[1]-g[3] for g in gms],[g[2]-g[1] for g in gms]])
+	# for g in gms:
+		# pl.errorbar(g[0],g[2]-g[3],bottom=g[3])
+	pl.rcParams['pdf.fonttype'] = 42
+	pl.rcParams['ps.fonttype'] = 42	
+	pl.legend(loc='upper right',fontsize=12)
+	pl.tick_params(labelsize=16)
+	pl.ylim(-5,280)
+	pl.xlim(0,13000)
+	pl.ticklabel_format(style='sci', axis='x', scilimits=(-3,4))
+	pl.xlabel('\# nodes in Project-Join Tree', fontsize=20)
+	pl.ylabel('Speedup', fontsize=20)
+	#pl.title('Speedup of top-down sampling relative to bottom-up', fontsize=24)
+	pl.axhline(y=1, color='r', linestyle='--')
+	pl.savefig('result_analysis/graphs/dmc_632ed69+/sampling_comparison2.png',bbox_inches='tight')
+	pl.show()
+	
+ 
+def calcSylvanCuddSpeedup(cur: Cursor, title:str):
+	dmc1TimeStr = '(dmc1.totpreaddcomp_t + dmc1.addcomp_t)'
+	dmc2TimeStr = '(dmc2.totpreaddcomp_t + dmc2.addcomp_t)'
+	if title == 'all': #not including enc1.. do it separately if needed
+		titleStr = '((dmc1.type=\'bayes\' and dmc2.type=\'bayes\') OR (dmc1.type=\'ps\' and dmc2.type=\'ps\') OR (dmc1.type=\'wb\' and dmc2.type=\'wb\'))'
+	elif title == 'allunique':
+		titleStr = '((dmc1.type=\'bayes\' and dmc2.type=\'bayes\') OR (dmc1.type=\'ps\' and dmc2.type=\'ps\') OR (dmc1.type=\'wb\' and dmc2.type=\'wb\'AND (dmc2.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\')) ))'
+	elif title=='bayes':
+		titleStr = '(dmc1.type=\'bayes\' and dmc2.type=\'bayes\')'
+	elif title == 'ps':
+		titleStr = '(dmc1.type=\'ps\' and dmc2.type=\'ps\')'	
+	elif title == 'wb':
+		titleStr = '(dmc1.type=\'wb\' and dmc2.type=\'wb\')'
+	elif title == 'db':
+		titleStr = '((dmc1.type=\'bayes\' and dmc2.type=\'bayes\') OR (dmc1.type=\'ps\' and dmc2.type=\'ps\'))'
 	rows = cur.execute("SELECT "+dmc1TimeStr+"/"+dmc2TimeStr+" from cudd_632ed69plus dmc1, sylvan_632ed69plus dmc2  WHERE "+titleStr+" AND (dmc1.name = dmc2.name) AND (dmc1.type = dmc2.type) AND ("+dmc1TimeStr+" < 1000) AND ("+dmc2TimeStr+" < 1000)").fetchall()
 	print (geomean(next(zip(*rows))))
 
+def failureAnalysis(cur):
+	rows = cur.execute("SELECT COUNT(*) FROM cudd_632ed69plus dmc WHERE (dmc.type='bayes' OR dmc.type='ps' OR (dmc.type='wb'AND (dmc.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\'))))").fetchall()
+	print('Total unique benchmarks:',rows)
+	rows = cur.execute("SELECT COUNT(*) FROM cudd_632ed69plus dmc WHERE (dmc.type='bayes' OR dmc.type='ps' OR (dmc.type='wb'AND (dmc.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\')))) AND (dmc.total_t IS NULL)").fetchall()
+	print('Unique Benchmarks where dmc (cudd) failed to generate 5000 samples',rows)
+	rows = cur.execute("SELECT COUNT(*) FROM cudd_632ed69plus dmc WHERE (dmc.type='bayes' OR dmc.type='ps' OR (dmc.type='wb'AND (dmc.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\')))) AND (dmc.total_t IS NULL) AND (dmc.planner_t IS NULL)").fetchall()
+	print('Unique Benchmarks where dmc (cudd) failed to generate 5000 samples and (because) no pj-tree was computed',rows)
+	rows = cur.execute("SELECT COUNT(*) FROM cudd_632ed69plus dmc, waps WHERE (dmc.type='bayes' OR dmc.type='ps' OR (dmc.type='wb'AND (dmc.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\')))) AND (waps.type=dmc.type) AND (waps.name=dmc.name) AND (waps.total_t <1000) AND (dmc.total_t IS NULL)").fetchall()
+	print('Total unique benchmarks where Waps succeeded but dmc failed',rows)
+	rows = cur.execute("SELECT COUNT(*) FROM cudd_632ed69plus dmc, waps WHERE (dmc.type='bayes' OR dmc.type='ps' OR (dmc.type='wb'AND (dmc.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\')))) AND (waps.type=dmc.type) AND (waps.name=dmc.name) AND (waps.total_t <1000) AND (dmc.total_t IS NULL) AND (dmc.planner_t IS NULL)").fetchall()
+	print('Total unique benchmarks where Waps succeeded but dmc failed and (because) pj-tree was not constructed',rows)
+	rows = cur.execute("SELECT COUNT(*) FROM cudd_632ed69plus dmc WHERE (dmc.type='bayes' OR dmc.type='ps' OR (dmc.type='wb'AND (dmc.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\')))) AND (dmc.planner_t < 1000)").fetchall()
+	print('Total unique benchmarks where pj-tree was constructed',rows)
+	denom = rows[0][0]
+	rows = cur.execute("SELECT COUNT(*)/"+str(denom)+".0 FROM cudd_632ed69plus dmc WHERE (dmc.type='bayes' OR dmc.type='ps' OR (dmc.type='wb'AND (dmc.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\')))) AND (dmc.planner_t < 1000) AND (dmc.addcomp_t < 1000)").fetchall()
+	print('fraction of unique pj-tree constructed where add compilation succeeded',rows)
+	rows = cur.execute("SELECT COUNT(*), COUNT(*)/"+str(denom)+".0 FROM cudd_632ed69plus dmc WHERE (dmc.type='bayes' OR dmc.type='ps' OR (dmc.type='wb'AND (dmc.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\')))) AND (dmc.planner_t < 1000) AND (dmc.addcomp_t < 1000) AND (dmc.total_t < 1000)").fetchall()
+	print('fraction of unique pj-tree constructed which were fully solved',rows)
+	
 def main():
 	con, cur = initDB()
-	#not including enc1. Do it separately if needed. title=all means both bayes and ps (but not enc1)
-	# print("Geometric Mean of Speedups relative to WAPS:")
-	# for t in ['totaltime', 'compiletime']:
-	# 	for lib in ['cudd', 'sylvan']:
-	# 		for title in ['bayes','ps','all']:
-	# 			print("	"+t+" "+lib+" "+title+":",end=" ")
-	# 			calcSpeedups(cur,t=='totaltime',lib,title)
-	# print("Number of benchmarks finished:")
-	# for t in ['totaltime', 'compiletime']:
-	# 	for lib in ['cudd', 'sylvan']:
-	# 		for title in ['bayes','ps','all']:
-	# 			print("	"+t+" "+lib+" "+title+":",end=" ")
-	# 			calcFinished(cur,t=='totaltime',lib,title)
-	# print("Number of benchmarks fastest on (total time):")
-	# for lib in ['cudd', 'sylvan']:
-	# 	for title in ['bayes','ps','all']:
-	# 		print("	"+lib+" "+title+":",end=" ")
-	# 		calcFastest(cur,lib,title)
+	#not including enc1 in all. Do it separately if needed.
+	#rows = cur.execute("SELECT COUNT(*) from cudd_632ed69plus dmc, waps WHERE (dmc.name=waps.name) AND (dmc.type=waps.type) AND (waps.type='bayes' OR waps.type='ps' OR (waps.type=\'wb\' AND (waps.name NOT IN (SELECT waps2.name FROM waps waps2 WHERE waps2.type=\'bayes\' OR waps2.type=\'ps\')))) AND (dmc.total_t < 1000 AND waps.total_t < 1000)").fetchall()
+	#print(rows)
+	#sys.exit(1)
+	print("Geometric Mean of Speedups relative to WAPS:")
+	for t in ['totaltime', 'compiletime']:
+		lib='cudd'
+		for title in ['db','wb','all','allunique']:
+			print("	"+t+" "+lib+" "+title+":",end=" ")
+			calcSpeedups(cur,t=='totaltime',lib,title)
+	print("Number of benchmarks finished:")
+	for t in ['totaltime', 'compiletime']:
+		lib='cudd'
+		for title in ['db','wb','all','allunique']:
+			print("	"+t+" "+lib+" "+title+":",end=" ")
+			calcFinished(cur,t=='totaltime',lib,title)
+	print("Number of benchmarks fastest on (total time):")
+	lib='cudd'
+	for title in ['db','wb','all','allunique']:
+		print("	"+lib+" "+title+":",end=" ")
+		calcFastest(cur,lib,title)
 	
-	for title in [['bayes','Bayes',1049],['ps','PseudoWeighted', 896], ['all', 'All',1945]]:
+	for title in [['db','db',1945],['wb','wb', 773]]:
 		plotCactus(cur,title[0],title[1],title[2])
-	plotSamplingComparison()
+	# plotSamplingComparison()
 	
-	# print("Geometric Mean of Compile Time Sylvan Speedups relative to CUDD:")
-	# for title in ('bayes','ps','all'):
-	# 	print(title,end=': ')
-	# 	calcSylvanCuddSpeedup(cur, title)
-	plotPar2TWs(cur,'bayes', 10,np.mean)
-	plotPar2TWs(cur,'ps', 10,np.mean)
+	print("Geometric Mean of Compile Time Sylvan Speedups relative to CUDD:")
+	for title in ('db','wb','all','allunique'):
+		print(title,end=': ')
+		calcSylvanCuddSpeedup(cur, title)
+	
+	plotPar2TWs(cur,'allunique', 10,np.mean)
+	
+	print('Top vs bottom')
+	plotSamplingComparison2(cur,'all')
+	
+	failureAnalysis(cur)
+	#plotPar2TWs(cur,'bayes', 10,np.mean)
+	#plotPar2TWs(cur,'ps', 10,np.mean)
+	#plotPar2TWs(cur,'wb', 10,np.mean)
+	
 	# for t in ['totaltime', 'compiletime']:
 	# 	for lib in ['cudd', 'sylvan']:
 	# 		for title in ['bayes','ps','enc1','all']:
 	# 			plotSpeedupTWs(cur,t=='totaltime',lib,title)
+	
+	#print('DPS(cudd) vs WAPS')
+	#calcSpeedups(cur, False, 'cudd','wb')
+	#calcFinished(cur, False, 'cudd','wb')
+	#calcFastest(cur, 'cudd','wb')
+	#print('CUDD vs Sylvan')
+	#calcSylvanCuddSpeedup(cur, 'wb')
+	
 	closeAll(con, cur)
 
 if __name__=="__main__":
