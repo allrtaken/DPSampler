@@ -24,7 +24,7 @@ def parseCNF(inF, verbose = 1):
 				wEncountered = True
 				wds = line.split()
 				for i in range(2,len(wds)):
-					lit = int(i/2) if i%2 == 0 else int(-i/2)
+					lit = int(i/2) if i%2 == 0 else -int(i/2)
 					litWts[lit] = float(wds[i])
 					assert(litWts[lit]>=0)
 				continue
